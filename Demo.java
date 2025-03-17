@@ -96,7 +96,7 @@ public class Demo extends JPanel implements ActionListener {
         return img;
     }
 
-    // ==================== LAB 1 & LAB 2 Operations ====================
+   // ==================== LAB 1 & LAB 2 Operations ====================
 
     // Negative (linear transform): s = 255 - r.
     private BufferedImage applyNegative(BufferedImage img) {
@@ -478,7 +478,7 @@ public class Demo extends JPanel implements ActionListener {
         }
         return gray;
     }
-
+    
     // Helper: create a grayscale image from a 2D array.
     private BufferedImage createGrayImage(int[][] gray) {
         int width = gray.length;
@@ -493,7 +493,7 @@ public class Demo extends JPanel implements ActionListener {
         }
         return img;
     }
-
+    
     // Salt-and-Pepper Noise: randomly set some pixels to 0 or 255.
     private BufferedImage addSaltAndPepperNoise(BufferedImage img, double noiseProb) {
         int width = img.getWidth(), height = img.getHeight();
@@ -511,7 +511,7 @@ public class Demo extends JPanel implements ActionListener {
         }
         return out;
     }
-
+    
     // Min Filter: replace each pixel with the minimum value in its neighborhood.
     private BufferedImage applyMinFilter(BufferedImage img, int filterSize) {
         int[][] gray = getGrayMatrix(img);
@@ -533,7 +533,7 @@ public class Demo extends JPanel implements ActionListener {
         }
         return createGrayImage(out);
     }
-
+    
     // Max Filter: replace each pixel with the maximum value in its neighborhood.
     private BufferedImage applyMaxFilter(BufferedImage img, int filterSize) {
         int[][] gray = getGrayMatrix(img);
@@ -555,7 +555,7 @@ public class Demo extends JPanel implements ActionListener {
         }
         return createGrayImage(out);
     }
-
+    
     // Midpoint Filter: replace each pixel with (min + max)/2 from its neighborhood.
     private BufferedImage applyMidpointFilter(BufferedImage img, int filterSize) {
         int[][] gray = getGrayMatrix(img);
@@ -580,7 +580,7 @@ public class Demo extends JPanel implements ActionListener {
         }
         return createGrayImage(out);
     }
-
+    
     // Median Filter: replace each pixel with the median of its neighborhood.
     private BufferedImage applyMedianFilter(BufferedImage img, int filterSize) {
         int[][] gray = getGrayMatrix(img);
@@ -605,14 +605,223 @@ public class Demo extends JPanel implements ActionListener {
         }
         return createGrayImage(out);
     }
-    // ==================== Undo & Reset ====================
+    // ------------------- Lab 5: Histogram & Histogram Equalisation -------------------
+    private int[] computeHistogram(BufferedImage img) {
+        int width = img.getWidth(), height = img.getHeight();
+        int[] hist = new int[256];
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                int gray = (r + g + b) / 3;
+                hist[gray]++;
+            }
+        }
+        return hist;
+    }
+    
+    private BufferedImage histogramEqualisation(BufferedImage img) {
+        int width = img.getWidth(), height = img.getHeight();
+        int total = width * height;
+        int[] hist = computeHistogram(img);
+        int[] cdf = new int[256];
+        cdf[0] = hist[0];
+        for (int i = 1; i < 256; i++){
+            cdf[i] = cdf[i-1] + hist[i];
+        }
+        int cdf_min = 0;
+        for (int i = 0; i < 256; i++){
+            if (cdf[i] != 0) { cdf_min = cdf[i]; break; }
+        }
+        int[] transform = new int[256];
+        for (int i = 0; i < 256; i++){
+            transform[i] = Math.round((cdf[i] - cdf_min) * 255f / (total - cdf_min));
+            transform[i] = clamp(transform[i]);
+        }
+        BufferedImage out = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                int gray = (r + g + b) / 3;
+                int newVal = transform[gray];
+                int newRgb = (255 << 24) | (newVal << 16) | (newVal << 8) | newVal;
+                out.setRGB(x, y, newRgb);
+            }
+        }
+        return out;
+    }
+    
+    // Display the histogram as a 256x256 image.
+    private BufferedImage displayHistogram(BufferedImage img) {
+        int[] hist = computeHistogram(img);
+        int max = 0;
+        for (int i = 0; i < 256; i++){
+            if (hist[i] > max) max = hist[i];
+        }
+        BufferedImage histImg = new BufferedImage(256, 256, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = histImg.createGraphics();
+        g2d.setColor(Color.WHITE);
+        g2d.fillRect(0, 0, 256, 256);
+        g2d.setColor(Color.BLACK);
+        for (int i = 0; i < 256; i++){
+            int heightBar = Math.round(hist[i] * 255f / max);
+            g2d.drawLine(i, 255, i, 255 - heightBar);
+        }
+        g2d.dispose();
+        return histImg;
+    }
+    
+    // ------------------- Lab 8: Thresholding -------------------
+    private double[] computeMeanStd(BufferedImage img) {
+        int[] hist = computeHistogram(img);
+        int total = img.getWidth() * img.getHeight();
+        double mean = 0;
+        for (int i = 0; i < 256; i++){
+            mean += i * hist[i];
+        }
+        mean /= total;
+        double variance = 0;
+        for (int i = 0; i < 256; i++){
+            variance += hist[i] * Math.pow(i - mean, 2);
+        }
+        variance /= total;
+        double std = Math.sqrt(variance);
+        return new double[]{mean, std};
+    }
+    
+    private BufferedImage simpleThreshold(BufferedImage img, int thresh) {
+        int width = img.getWidth(), height = img.getHeight();
+        BufferedImage out = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                int gray = (r + g + b) / 3;
+                int val = (gray >= thresh) ? 255 : 0;
+                int newRgb = (255 << 24) | (val << 16) | (val << 8) | val;
+                out.setRGB(x, y, newRgb);
+            }
+        }
+        return out;
+    }
+    
+    private int automatedThreshold(BufferedImage img) {
+        int width = img.getWidth(), height = img.getHeight();
+        int[][] gray = new int[width][height];
+        int sum = 0;
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                int gVal = (r + g + b) / 3;
+                gray[x][y] = gVal;
+                sum += gVal;
+            }
+        }
+        int T = sum / (width * height);
+        boolean converged = false;
+        while (!converged) {
+            long sum1 = 0, sum2 = 0;
+            int count1 = 0, count2 = 0;
+            for (int y = 0; y < height; y++){
+                for (int x = 0; x < width; x++){
+                    if (gray[x][y] < T) {
+                        sum1 += gray[x][y];
+                        count1++;
+                    } else {
+                        sum2 += gray[x][y];
+                        count2++;
+                    }
+                }
+            }
+            int T_new = T;
+            if (count1 > 0 && count2 > 0) {
+                T_new = (int)Math.round((sum1 / (double)count1 + sum2 / (double)count2) / 2.0);
+            }
+            if (Math.abs(T_new - T) < 1)
+                converged = true;
+            T = T_new;
+        }
+        return T;
+    }
+    
+    private BufferedImage adaptiveThreshold(BufferedImage img, int blockSize, int varianceThreshold) {
+        int width = img.getWidth(), height = img.getHeight();
+        BufferedImage out = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y += blockSize) {
+            for (int x = 0; x < width; x += blockSize) {
+                int w = Math.min(blockSize, width - x);
+                int h = Math.min(blockSize, height - y);
+                int[] hist = new int[256];
+                int total = w * h;
+                int sum = 0;
+                for (int j = 0; j < h; j++){
+                    for (int i = 0; i < w; i++){
+                        int rgb = img.getRGB(x+i, y+j);
+                        int r = (rgb >> 16) & 0xff;
+                        int g = (rgb >> 8) & 0xff;
+                        int b = rgb & 0xff;
+                        int gray = (r+g+b)/3;
+                        hist[gray]++;
+                        sum += gray;
+                    }
+                }
+                double mean = sum / (double) total;
+                double var = 0;
+                for (int i = 0; i < 256; i++){
+                    var += hist[i] * Math.pow(i - mean, 2);
+                }
+                var /= total;
+                double std = Math.sqrt(var);
+                int T = (int)mean;
+                if (std > varianceThreshold) {
+                    int sum1 = 0, sum2 = 0, count1 = 0, count2 = 0;
+                    for (int j = 0; j < h; j++){
+                        for (int i = 0; i < w; i++){
+                            int rgb = img.getRGB(x+i, y+j);
+                            int r = (rgb >> 16) & 0xff;
+                            int g = (rgb >> 8) & 0xff;
+                            int b = rgb & 0xff;
+                            int grayVal = (r+g+b)/3;
+                            if(grayVal < T) { sum1 += grayVal; count1++; }
+                            else { sum2 += grayVal; count2++; }
+                        }
+                    }
+                    if(count1 > 0 && count2 > 0)
+                        T = (int)Math.round((sum1/count1 + sum2/count2)/2.0);
+                }
+                for (int j = 0; j < h; j++){
+                    for (int i = 0; i < w; i++){
+                        int rgb = img.getRGB(x+i, y+j);
+                        int r = (rgb >> 16) & 0xff;
+                        int g = (rgb >> 8) & 0xff;
+                        int b = rgb & 0xff;
+                        int grayVal = (r+g+b)/3;
+                        int val = (grayVal >= T) ? 255 : 0;
+                        int newRgb = (255 << 24) | (val << 16) | (val << 8) | val;
+                        out.setRGB(x+i, y+j, newRgb);
+                    }
+                }
+            }
+        }
+        return out;
+    }
 
-    // Backup the current processed image.
+    // ------------------- Undo & Reset -------------------
     private void backupForUndo() {
         if (processedImage != null)
             undoStack.push(copyImage(processedImage));
     }
-
+    
     // Undo the last operation.
     private void undo() {
         if (!undoStack.isEmpty()) {
@@ -622,14 +831,14 @@ public class Demo extends JPanel implements ActionListener {
             JOptionPane.showMessageDialog(this, "Nothing to undo!");
         }
     }
-
+    
     // Reset processed image to the original and clear the undo stack.
     private void resetToOriginal() {
         processedImage = copyImage(originalImage);
         undoStack.clear();
         repaint();
     }
-
+    
     // ==================== Painting ====================
 
     @Override
@@ -640,7 +849,7 @@ public class Demo extends JPanel implements ActionListener {
         if (processedImage != null)
             g.drawImage(processedImage, originalImage.getWidth() + gap, 0, this);
     }
-
+    
     // ==================== Action Handling ====================
 
     @Override
@@ -683,180 +892,180 @@ public class Demo extends JPanel implements ActionListener {
         } else if (cmd.equals("Undo")) {
             undo();
         }
-        // ----- Lab1 & Lab2 Operations -----
-        else if (cmd.equals("Original")) {
-            backupForUndo();
-            resetToOriginal();
-        } else if (cmd.equals("Negative")) {
-            backupForUndo();
-            processedImage = applyNegative(processedImage);
-            repaint();
-        } else if (cmd.equals("Rescale")) {
-            String input = JOptionPane.showInputDialog(this, "Enter scaling factor (0 to 2):", "1.0");
-            if (input != null) {
-                try {
-                    float factor = Float.parseFloat(input);
-                    if (factor < 0 || factor > 2)
-                        JOptionPane.showMessageDialog(this, "Scaling factor must be between 0 and 2.");
-                    else {
+               // ----- Lab1 & Lab2 Operations -----
+               else if (cmd.equals("Original")) {
+                backupForUndo();
+                resetToOriginal();
+            } else if (cmd.equals("Negative")) {
+                backupForUndo();
+                processedImage = applyNegative(processedImage);
+                repaint();
+            } else if (cmd.equals("Rescale")) {
+                String input = JOptionPane.showInputDialog(this, "Enter scaling factor (0 to 2):", "1.0");
+                if (input != null) {
+                    try {
+                        float factor = Float.parseFloat(input);
+                        if (factor < 0 || factor > 2)
+                            JOptionPane.showMessageDialog(this, "Scaling factor must be between 0 and 2.");
+                        else {
+                            backupForUndo();
+                            processedImage = applyRescale(processedImage, factor);
+                            repaint();
+                        }
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(this, "Invalid input for scaling factor.");
+                    }
+                }
+            } else if (cmd.equals("Shift")) {
+                String input = JOptionPane.showInputDialog(this, "Enter shift value (integer):", "0");
+                if (input != null) {
+                    try {
+                        int shiftVal = Integer.parseInt(input);
                         backupForUndo();
-                        processedImage = applyRescale(processedImage, factor);
+                        processedImage = applyShift(processedImage, shiftVal);
                         repaint();
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(this, "Invalid input for shift value.");
                     }
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Invalid input for scaling factor.");
                 }
+            } else if (cmd.equals("Shift+Rescale")) {
+                backupForUndo();
+                processedImage = applyShiftAndRescale(processedImage);
+                repaint();
             }
-        } else if (cmd.equals("Shift")) {
-            String input = JOptionPane.showInputDialog(this, "Enter shift value (integer):", "0");
-            if (input != null) {
-                try {
-                    int shiftVal = Integer.parseInt(input);
-                    backupForUndo();
-                    processedImage = applyShift(processedImage, shiftVal);
-                    repaint();
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Invalid input for shift value.");
-                }
-            }
-        } else if (cmd.equals("Shift+Rescale")) {
-            backupForUndo();
-            processedImage = applyShiftAndRescale(processedImage);
-            repaint();
-        }
-        // ----- Lab3 Operations -----
-        else if (cmd.equals("Arithmetic Add") ||
-                 cmd.equals("Arithmetic Subtract") ||
-                 cmd.equals("Arithmetic Multiply") ||
-                 cmd.equals("Arithmetic Divide")) {
-            JFileChooser chooser = new JFileChooser();
-            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                try {
-                    BufferedImage secondImage = ImageIO.read(file);
-                    if (secondImage.getType() != BufferedImage.TYPE_INT_RGB) {
-                        BufferedImage temp = new BufferedImage(
-                            secondImage.getWidth(), secondImage.getHeight(), BufferedImage.TYPE_INT_RGB
-                        );
-                        Graphics g = temp.getGraphics();
-                        g.drawImage(secondImage, 0, 0, null);
-                        g.dispose();
-                        secondImage = temp;
-                    }
-                    backupForUndo();
-                    String op = "";
-                    if (cmd.equals("Arithmetic Add")) op = "add";
-                    else if (cmd.equals("Arithmetic Subtract")) op = "subtract";
-                    else if (cmd.equals("Arithmetic Multiply")) op = "multiply";
-                    else if (cmd.equals("Arithmetic Divide")) op = "divide";
-                    processedImage = applyArithmeticOperation(processedImage, secondImage, op);
-                    repaint();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
-        } else if (cmd.equals("Bitwise NOT")) {
-            backupForUndo();
-            processedImage = applyBitwiseNot(processedImage);
-            repaint();
-        } else if (cmd.equals("Bitwise AND") ||
-                   cmd.equals("Bitwise OR") ||
-                   cmd.equals("Bitwise XOR")) {
-            JFileChooser chooser = new JFileChooser();
-            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                try {
-                    BufferedImage secondImage = ImageIO.read(file);
-                    if (secondImage.getType() != BufferedImage.TYPE_INT_RGB) {
-                        BufferedImage temp = new BufferedImage(
-                            secondImage.getWidth(), secondImage.getHeight(), BufferedImage.TYPE_INT_RGB
-                        );
-                        Graphics g = temp.getGraphics();
-                        g.drawImage(secondImage, 0, 0, null);
-                        g.dispose();
-                        secondImage = temp;
-                    }
-                    backupForUndo();
-                    String op = "";
-                    if (cmd.equals("Bitwise AND")) op = "and";
-                    else if (cmd.equals("Bitwise OR")) op = "or";
-                    else if (cmd.equals("Bitwise XOR")) op = "xor";
-                    processedImage = applyBitwiseOperation(processedImage, secondImage, op);
-                    repaint();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
-        } else if (cmd.equals("ROI Negative")) {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setDialogTitle("Select Mask Image (Black & White)");
-            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                try {
-                    BufferedImage maskImage = ImageIO.read(file);
-                    backupForUndo();
-                    processedImage = applyROINegative(processedImage, maskImage);
-                    repaint();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
-        }
-        // ----- Lab4 Operations -----
-        else if (cmd.equals("Point Negative")) {
-            backupForUndo();
-            processedImage = applyPointNegative(processedImage);
-            repaint();
-        } else if (cmd.equals("Logarithmic Transform")) {
-            String input = JOptionPane.showInputDialog(this, "Enter constant c (or leave blank for automatic):", "");
-            Float cVal = null;
-            if (input != null && !input.trim().isEmpty()) {
-                try {
-                    cVal = Float.parseFloat(input);
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Invalid input for constant c. Using automatic value.");
-                }
-            }
-            backupForUndo();
-            processedImage = applyLogTransform(processedImage, cVal);
-            repaint();
-        } else if (cmd.equals("Power-Law Transform")) {
-            String input = JOptionPane.showInputDialog(this, "Enter power (p, from 0.01 to 25):", "1.0");
-            if (input != null) {
-                try {
-                    float p = Float.parseFloat(input);
-                    if (p < 0.01f || p > 25f) {
-                        JOptionPane.showMessageDialog(this, "Power must be between 0.01 and 25.");
-                    } else {
+            // ----- Lab3 Operations -----
+            else if (cmd.equals("Arithmetic Add") ||
+                     cmd.equals("Arithmetic Subtract") ||
+                     cmd.equals("Arithmetic Multiply") ||
+                     cmd.equals("Arithmetic Divide")) {
+                JFileChooser chooser = new JFileChooser();
+                if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    File file = chooser.getSelectedFile();
+                    try {
+                        BufferedImage secondImage = ImageIO.read(file);
+                        if (secondImage.getType() != BufferedImage.TYPE_INT_RGB) {
+                            BufferedImage temp = new BufferedImage(
+                                secondImage.getWidth(), secondImage.getHeight(), BufferedImage.TYPE_INT_RGB
+                            );
+                            Graphics g = temp.getGraphics();
+                            g.drawImage(secondImage, 0, 0, null);
+                            g.dispose();
+                            secondImage = temp;
+                        }
                         backupForUndo();
-                        processedImage = applyPowerLawTransform(processedImage, p);
+                        String op = "";
+                        if (cmd.equals("Arithmetic Add")) op = "add";
+                        else if (cmd.equals("Arithmetic Subtract")) op = "subtract";
+                        else if (cmd.equals("Arithmetic Multiply")) op = "multiply";
+                        else if (cmd.equals("Arithmetic Divide")) op = "divide";
+                        processedImage = applyArithmeticOperation(processedImage, secondImage, op);
                         repaint();
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
                     }
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Invalid input for power.");
                 }
-            }
-        } else if (cmd.equals("Random LUT Transform")) {
-            backupForUndo();
-            processedImage = applyRandomLUT(processedImage);
-            repaint();
-        } else if (cmd.equals("Bit-Plane Slicing")) {
-            String input = JOptionPane.showInputDialog(this, "Enter bit plane (0-7):", "0");
-            if (input != null) {
-                try {
-                    int bit = Integer.parseInt(input);
-                    if (bit < 0 || bit > 7) {
-                        JOptionPane.showMessageDialog(this, "Bit must be between 0 and 7.");
-                    } else {
+            } else if (cmd.equals("Bitwise NOT")) {
+                backupForUndo();
+                processedImage = applyBitwiseNot(processedImage);
+                repaint();
+            } else if (cmd.equals("Bitwise AND") ||
+                       cmd.equals("Bitwise OR") ||
+                       cmd.equals("Bitwise XOR")) {
+                JFileChooser chooser = new JFileChooser();
+                if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    File file = chooser.getSelectedFile();
+                    try {
+                        BufferedImage secondImage = ImageIO.read(file);
+                        if (secondImage.getType() != BufferedImage.TYPE_INT_RGB) {
+                            BufferedImage temp = new BufferedImage(
+                                secondImage.getWidth(), secondImage.getHeight(), BufferedImage.TYPE_INT_RGB
+                            );
+                            Graphics g = temp.getGraphics();
+                            g.drawImage(secondImage, 0, 0, null);
+                            g.dispose();
+                            secondImage = temp;
+                        }
                         backupForUndo();
-                        processedImage = applyBitPlaneSlicing(processedImage, bit);
+                        String op = "";
+                        if (cmd.equals("Bitwise AND")) op = "and";
+                        else if (cmd.equals("Bitwise OR")) op = "or";
+                        else if (cmd.equals("Bitwise XOR")) op = "xor";
+                        processedImage = applyBitwiseOperation(processedImage, secondImage, op);
                         repaint();
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
                     }
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Invalid input for bit.");
+                }
+            } else if (cmd.equals("ROI Negative")) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setDialogTitle("Select Mask Image (Black & White)");
+                if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    File file = chooser.getSelectedFile();
+                    try {
+                        BufferedImage maskImage = ImageIO.read(file);
+                        backupForUndo();
+                        processedImage = applyROINegative(processedImage, maskImage);
+                        repaint();
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
                 }
             }
-        }else if (cmd.equals("Convolution")) {
+            // ----- Lab4 Operations -----
+            else if (cmd.equals("Point Negative")) {
+                backupForUndo();
+                processedImage = applyPointNegative(processedImage);
+                repaint();
+            } else if (cmd.equals("Logarithmic Transform")) {
+                String input = JOptionPane.showInputDialog(this, "Enter constant c (or leave blank for automatic):", "");
+                Float cVal = null;
+                if (input != null && !input.trim().isEmpty()) {
+                    try {
+                        cVal = Float.parseFloat(input);
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(this, "Invalid input for constant c. Using automatic value.");
+                    }
+                }
+                backupForUndo();
+                processedImage = applyLogTransform(processedImage, cVal);
+                repaint();
+            } else if (cmd.equals("Power-Law Transform")) {
+                String input = JOptionPane.showInputDialog(this, "Enter power (p, from 0.01 to 25):", "1.0");
+                if (input != null) {
+                    try {
+                        float p = Float.parseFloat(input);
+                        if (p < 0.01f || p > 25f) {
+                            JOptionPane.showMessageDialog(this, "Power must be between 0.01 and 25.");
+                        } else {
+                            backupForUndo();
+                            processedImage = applyPowerLawTransform(processedImage, p);
+                            repaint();
+                        }
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(this, "Invalid input for power.");
+                    }
+                }
+            } else if (cmd.equals("Random LUT Transform")) {
+                backupForUndo();
+                processedImage = applyRandomLUT(processedImage);
+                repaint();
+            } else if (cmd.equals("Bit-Plane Slicing")) {
+                String input = JOptionPane.showInputDialog(this, "Enter bit plane (0-7):", "0");
+                if (input != null) {
+                    try {
+                        int bit = Integer.parseInt(input);
+                        if (bit < 0 || bit > 7) {
+                            JOptionPane.showMessageDialog(this, "Bit must be between 0 and 7.");
+                        } else {
+                            backupForUndo();
+                            processedImage = applyBitPlaneSlicing(processedImage, bit);
+                            repaint();
+                        }
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(this, "Invalid input for bit.");
+                    }
+                }
+            }else if (cmd.equals("Convolution")) {
             // Present a list of sample masks for selection.
             String[] options = { 
                 "Averaging 3x3", 
@@ -1042,8 +1251,57 @@ public class Demo extends JPanel implements ActionListener {
                 }
             }
         }
+        // Lab8 Operations: Thresholding
+        else if (cmd.equals("Mean & Std")) {
+            double[] ms = computeMeanStd(processedImage);
+            JOptionPane.showMessageDialog(this, "Mean: " + ms[0] + "\nStd Dev: " + ms[1]);
+        } else if (cmd.equals("Simple Threshold")) {
+            String input = JOptionPane.showInputDialog(this, "Enter threshold (0-255):", "128");
+            if (input != null) {
+                try {
+                    int thresh = Integer.parseInt(input);
+                    backupForUndo();
+                    processedImage = simpleThreshold(processedImage, thresh);
+                    repaint();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid threshold value.");
+                }
+            }
+        } else if (cmd.equals("Automated Threshold")) {
+            backupForUndo();
+            int T = automatedThreshold(processedImage);
+            JOptionPane.showMessageDialog(this, "Automated threshold: " + T);
+            processedImage = simpleThreshold(processedImage, T);
+            repaint();
+        } else if (cmd.equals("Adaptive Threshold")) {
+            String input1 = JOptionPane.showInputDialog(this, "Enter block size (odd integer):", "16");
+            String input2 = JOptionPane.showInputDialog(this, "Enter variance threshold:", "100");
+            if (input1 != null && input2 != null) {
+                try {
+                    int blockSize = Integer.parseInt(input1);
+                    int varThresh = Integer.parseInt(input2);
+                    backupForUndo();
+                    processedImage = adaptiveThreshold(processedImage, blockSize, varThresh);
+                    repaint();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid input for adaptive threshold.");
+                }
+            }
+        }
+        // Lab5 Operations: Histogram & Histogram Equalisation
+        else if (cmd.equals("Histogram Equalisation")) {
+            backupForUndo();
+            processedImage = histogramEqualisation(processedImage);
+            repaint();
+        } else if (cmd.equals("Display Histogram")) {
+            BufferedImage histImg = displayHistogram(processedImage);
+            JFrame histFrame = new JFrame("Histogram");
+            histFrame.getContentPane().add(new JLabel(new ImageIcon(histImg)));
+            histFrame.pack();
+            histFrame.setVisible(true);
+        }
     }
-
+    
     // ------------------- Main Method -------------------
     public static void main(String[] args) {
         // Prompt the user to select an image file at startup.
@@ -1051,15 +1309,15 @@ public class Demo extends JPanel implements ActionListener {
         if (fileChooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION)
             System.exit(0);
         File selectedFile = fileChooser.getSelectedFile();
-
+        
         Demo demo = new Demo(selectedFile);
         JFrame frame = new JFrame("Image Processing Demo");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.getContentPane().add(demo, BorderLayout.CENTER);
-
+        
         // Build the menu bar.
         JMenuBar menuBar = new JMenuBar();
-
+        
         // File menu.
         JMenu fileMenu = new JMenu("File");
         JMenuItem openItem = new JMenuItem("Open");
@@ -1071,7 +1329,7 @@ public class Demo extends JPanel implements ActionListener {
         saveItem.addActionListener(demo);
         fileMenu.add(saveItem);
         menuBar.add(fileMenu);
-
+        
         // Edit menu.
         JMenu editMenu = new JMenu("Edit");
         JMenuItem undoItem = new JMenuItem("Undo");
@@ -1079,7 +1337,7 @@ public class Demo extends JPanel implements ActionListener {
         undoItem.addActionListener(demo);
         editMenu.add(undoItem);
         menuBar.add(editMenu);
-
+        
         // Lab1 & Lab2 Operations.
         JMenu opMenu = new JMenu("Operations");
         String[] ops = {"Original", "Negative", "Rescale", "Shift", "Shift+Rescale"};
@@ -1090,7 +1348,7 @@ public class Demo extends JPanel implements ActionListener {
             opMenu.add(item);
         }
         menuBar.add(opMenu);
-
+        
         // Lab3 Operations.
         JMenu lab3Menu = new JMenu("Lab3 Operations");
         String[] lab3Ops = {"Arithmetic Add", "Arithmetic Subtract", "Arithmetic Multiply", "Arithmetic Divide",
@@ -1102,7 +1360,7 @@ public class Demo extends JPanel implements ActionListener {
             lab3Menu.add(item);
         }
         menuBar.add(lab3Menu);
-
+        
         // Lab4 Operations.
         JMenu lab4Menu = new JMenu("Lab4 Operations");
         String[] lab4Ops = {"Point Negative", "Logarithmic Transform", "Power-Law Transform", "Random LUT Transform", "Bit-Plane Slicing"};
@@ -1113,7 +1371,18 @@ public class Demo extends JPanel implements ActionListener {
             lab4Menu.add(item);
         }
         menuBar.add(lab4Menu);
-
+        
+        // Lab5 Operations.
+        JMenu lab5Menu = new JMenu("Lab5 Operations");
+        String[] lab5Ops = {"Histogram Equalisation", "Display Histogram"};
+        for (String op : lab5Ops) {
+            JMenuItem item = new JMenuItem(op);
+            item.setActionCommand(op);
+            item.addActionListener(demo);
+            lab5Menu.add(item);
+        }
+        menuBar.add(lab5Menu);
+        
         // Lab6 Operations.
         JMenu lab6Menu = new JMenu("Lab6 Operations");
         JMenuItem convItem = new JMenuItem("Convolution");
@@ -1121,7 +1390,7 @@ public class Demo extends JPanel implements ActionListener {
         convItem.addActionListener(demo);
         lab6Menu.add(convItem);
         menuBar.add(lab6Menu);
-
+        
         // Lab7 Operations.
         JMenu lab7Menu = new JMenu("Lab7 Operations");
         String[] lab7Ops = {"Salt-and-Pepper Noise", "Min Filter", "Max Filter", "Midpoint Filter", "Median Filter"};
@@ -1132,7 +1401,18 @@ public class Demo extends JPanel implements ActionListener {
             lab7Menu.add(item);
         }
         menuBar.add(lab7Menu);
-
+        
+        // Lab8 Operations.
+        JMenu lab8Menu = new JMenu("Lab8 Operations");
+        String[] lab8Ops = {"Mean & Std", "Simple Threshold", "Automated Threshold", "Adaptive Threshold"};
+        for (String op : lab8Ops) {
+            JMenuItem item = new JMenuItem(op);
+            item.setActionCommand(op);
+            item.addActionListener(demo);
+            lab8Menu.add(item);
+        }
+        menuBar.add(lab8Menu);
+        
         frame.setJMenuBar(menuBar);
         frame.pack();
         frame.setVisible(true);
