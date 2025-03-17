@@ -359,6 +359,97 @@ public class Demo extends JPanel implements ActionListener {
         return result;
     }
 
+    // ------------------- LAB 6: Convolution -------------------
+    /**
+     * Applies convolution to the given image using the provided kernel.
+     * The image is first converted to grayscale. If useAbsolute is true, the result
+     * is converted to absolute values. If normalize is true, the result is linearly
+     * mapped to the range [0,255].
+     *
+     * @param img         the input image (will be converted to grayscale)
+     * @param kernel      the convolution kernel (2D float array)
+     * @param useAbsolute if true, take the absolute value of each convolution result
+     * @param normalize   if true, linearly map results to [0,255]
+     * @return a new BufferedImage containing the convolution result in grayscale
+     */
+    private BufferedImage applyConvolution(BufferedImage img, float[][] kernel, boolean useAbsolute, boolean normalize) {
+        int width = img.getWidth();
+        int height = img.getHeight();
+        int kRows = kernel.length;
+        int kCols = kernel[0].length;
+        int kCenterX = kCols / 2;
+        int kCenterY = kRows / 2;
+        
+        // Convert the image to grayscale (using simple average)
+        int[][] gray = new int[width][height];
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                gray[x][y] = (r + g + b) / 3;
+            }
+        }
+        
+        // Convolve: create an array to hold convolution values.
+        float[][] conv = new float[width][height];
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                float sum = 0;
+                for (int m = 0; m < kRows; m++){
+                    for (int n = 0; n < kCols; n++){
+                        int ix = x + n - kCenterX;
+                        int iy = y + m - kCenterY;
+                        if (ix >= 0 && ix < width && iy >= 0 && iy < height) {
+                            sum += kernel[m][n] * gray[ix][iy];
+                        }
+                    }
+                }
+                conv[x][y] = sum;
+            }
+        }
+        
+        // Optionally convert to absolute values.
+        if (useAbsolute) {
+            for (int y = 0; y < height; y++){
+                for (int x = 0; x < width; x++){
+                    conv[x][y] = Math.abs(conv[x][y]);
+                }
+            }
+        }
+        
+        // Optionally normalize to [0,255].
+        if (normalize) {
+            float minVal = Float.MAX_VALUE;
+            float maxVal = -Float.MAX_VALUE;
+            for (int y = 0; y < height; y++){
+                for (int x = 0; x < width; x++){
+                    if (conv[x][y] < minVal) minVal = conv[x][y];
+                    if (conv[x][y] > maxVal) maxVal = conv[x][y];
+                }
+            }
+            float range = maxVal - minVal;
+            if (range == 0) range = 1;
+            for (int y = 0; y < height; y++){
+                for (int x = 0; x < width; x++){
+                    conv[x][y] = (conv[x][y] - minVal) * 255 / range;
+                }
+            }
+        }
+        
+        // Create a new grayscale image from the convolution result.
+        BufferedImage outImg = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int val = clamp(Math.round(conv[x][y]));
+                int rgb = (255 << 24) | (val << 16) | (val << 8) | val;
+                outImg.setRGB(x, y, rgb);
+            }
+        }
+        return outImg;
+    }
+
     // ==================== Undo & Reset ====================
 
     // Backup the current processed image.
@@ -610,10 +701,133 @@ public class Demo extends JPanel implements ActionListener {
                     JOptionPane.showMessageDialog(this, "Invalid input for bit.");
                 }
             }
+        }else if (cmd.equals("Convolution")) {
+            // Present a list of sample masks for selection.
+            String[] options = { 
+                "Averaging 3x3", 
+                "Weighted Averaging 3x3", 
+                "4-Neighbour Laplacian", 
+                "8-Neighbour Laplacian", 
+                "4-Neighbour Laplacian Enhancement", 
+                "8-Neighbour Laplacian Enhancement", 
+                "Roberts", 
+                "Sobel X", 
+                "Sobel Y", 
+                "Gaussian 5x5", 
+                "Laplacian of Gaussian 5x5" 
+            };
+            String selection = (String) JOptionPane.showInputDialog(
+                this, 
+                "Select a convolution mask:", 
+                "Convolution", 
+                JOptionPane.PLAIN_MESSAGE, 
+                null, 
+                options, 
+                options[0]
+            );
+            if (selection != null) {
+                float[][] kernel = null;
+                boolean useAbs = false;
+                switch(selection) {
+                    case "Averaging 3x3":
+                        kernel = new float[][] {
+                            {1/9f, 1/9f, 1/9f},
+                            {1/9f, 1/9f, 1/9f},
+                            {1/9f, 1/9f, 1/9f}
+                        };
+                        break;
+                    case "Weighted Averaging 3x3":
+                        kernel = new float[][] {
+                            {1/16f, 2/16f, 1/16f},
+                            {2/16f, 4/16f, 2/16f},
+                            {1/16f, 2/16f, 1/16f}
+                        };
+                        break;
+                    case "4-Neighbour Laplacian":
+                        kernel = new float[][] {
+                            {0, 1, 0},
+                            {1, -4, 1},
+                            {0, 1, 0}
+                        };
+                        useAbs = true;
+                        break;
+                    case "8-Neighbour Laplacian":
+                        kernel = new float[][] {
+                            {1, 1, 1},
+                            {1, -8, 1},
+                            {1, 1, 1}
+                        };
+                        useAbs = true;
+                        break;
+                    case "4-Neighbour Laplacian Enhancement":
+                        kernel = new float[][] {
+                            {0, 1, 0},
+                            {1, 5, 1},
+                            {0, 1, 0}
+                        };
+                        break;
+                    case "8-Neighbour Laplacian Enhancement":
+                        kernel = new float[][] {
+                            {1, 1, 1},
+                            {1, 9, 1},
+                            {1, 1, 1}
+                        };
+                        break;
+                    case "Roberts":
+                        // Using a 2x2 Roberts cross operator.
+                        kernel = new float[][] {
+                            {0, 1},
+                            {-1, 0}
+                        };
+                        useAbs = true;
+                        break;
+                    case "Sobel X":
+                        kernel = new float[][] {
+                            {1, 0, -1},
+                            {2, 0, -2},
+                            {1, 0, -1}
+                        };
+                        useAbs = true;
+                        break;
+                    case "Sobel Y":
+                        kernel = new float[][] {
+                            {1, 2, 1},
+                            {0, 0, 0},
+                            {-1, -2, -1}
+                        };
+                        useAbs = true;
+                        break;
+                    case "Gaussian 5x5":
+                        kernel = new float[][] {
+                            {1/273f, 4/273f, 7/273f, 4/273f, 1/273f},
+                            {4/273f, 16/273f,26/273f,16/273f,4/273f},
+                            {7/273f,26/273f,41/273f,26/273f,7/273f},
+                            {4/273f,16/273f,26/273f,16/273f,4/273f},
+                            {1/273f, 4/273f, 7/273f, 4/273f, 1/273f}
+                        };
+                        break;
+                    case "Laplacian of Gaussian 5x5":
+                        kernel = new float[][] {
+                            {0, 0, 1, 0, 0},
+                            {0, 1, 2, 1, 0},
+                            {1, 2, -16, 2, 1},
+                            {0, 1, 2, 1, 0},
+                            {0, 0, 1, 0, 0}
+                        };
+                        useAbs = true;
+                        break;
+                }
+                if (kernel != null) {
+                    backupForUndo();
+                    // Always normalize the convolution result.
+                    processedImage = applyConvolution(processedImage, kernel, useAbs, true);
+                    repaint();
+                }
+            }
         }
     }
 
-    // ==================== Main Method ====================
+    // ------------------- Main Method -------------------
     public static void main(String[] args) {
         // Prompt the user to select an image file at startup.
         JFileChooser fileChooser = new JFileChooser();
@@ -682,6 +896,14 @@ public class Demo extends JPanel implements ActionListener {
             lab4Menu.add(item);
         }
         menuBar.add(lab4Menu);
+
+        // Lab6 Operations.
+        JMenu lab6Menu = new JMenu("Lab6 Operations");
+        JMenuItem convItem = new JMenuItem("Convolution");
+        convItem.setActionCommand("Convolution");
+        convItem.addActionListener(demo);
+        lab6Menu.add(convItem);
+        menuBar.add(lab6Menu);
 
         frame.setJMenuBar(menuBar);
         frame.pack();
