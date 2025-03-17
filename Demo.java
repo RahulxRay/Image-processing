@@ -8,20 +8,19 @@ import javax.imageio.*;
 import javax.swing.*;
 
 public class Demo extends JPanel implements ActionListener {
-    // The original image chosen at startup.
+    // Original image loaded at startup.
     private BufferedImage originalImage;
-    // The current processed image.
+    // Processed image (result of operations).
     private BufferedImage processedImage;
     // Undo stack to store previous states.
     private Stack<BufferedImage> undoStack = new Stack<>();
-    // Gap between the two images when displayed side by side.
+    // Gap (in pixels) between images when displayed.
     private final int gap = 10;
 
-    // Constructor: load the image from the provided file.
+    // Constructor: load the image from a file.
     public Demo(File imageFile) {
         try {
             originalImage = ImageIO.read(imageFile);
-            // Ensure the image is in TYPE_INT_RGB.
             if (originalImage.getType() != BufferedImage.TYPE_INT_RGB) {
                 BufferedImage temp = new BufferedImage(
                     originalImage.getWidth(), originalImage.getHeight(), 
@@ -32,7 +31,6 @@ public class Demo extends JPanel implements ActionListener {
                 g.dispose();
                 originalImage = temp;
             }
-            // Initially, processedImage is a copy of originalImage.
             processedImage = copyImage(originalImage);
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this, "Image could not be read.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -40,7 +38,7 @@ public class Demo extends JPanel implements ActionListener {
         }
     }
 
-    // Utility: create a deep copy of a BufferedImage.
+    // Create a deep copy of a BufferedImage.
     private BufferedImage copyImage(BufferedImage img) {
         BufferedImage copy = new BufferedImage(img.getWidth(), img.getHeight(), img.getType());
         Graphics g = copy.getGraphics();
@@ -49,7 +47,7 @@ public class Demo extends JPanel implements ActionListener {
         return copy;
     }
 
-    // Panel size: wide enough to hold both images side by side.
+    // Preferred size of the panel to accommodate two images side by side.
     @Override
     public Dimension getPreferredSize() {
         int width = originalImage.getWidth() + gap + processedImage.getWidth();
@@ -57,12 +55,13 @@ public class Demo extends JPanel implements ActionListener {
         return new Dimension(width, height);
     }
 
-    // Clamp a value to the range [0, 255].
+    // Clamp a value to the range [0,255].
     private int clamp(int value) {
         return Math.max(0, Math.min(255, value));
     }
 
-    // Convert a BufferedImage to a 3D int array [width][height][4] where indices 1-3 are red, green, blue.
+    // Convert a BufferedImage to a 3D int array [width][height][4]
+    // where index 0 is alpha, 1 is red, 2 is green, 3 is blue.
     private int[][][] convertToArray(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
@@ -70,16 +69,16 @@ public class Demo extends JPanel implements ActionListener {
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
                 int p = image.getRGB(x, y);
-                arr[x][y][0] = (p >> 24) & 0xff; // alpha
-                arr[x][y][1] = (p >> 16) & 0xff; // red
-                arr[x][y][2] = (p >> 8) & 0xff;  // green
-                arr[x][y][3] = p & 0xff;         // blue
+                arr[x][y][0] = (p >> 24) & 0xff;
+                arr[x][y][1] = (p >> 16) & 0xff;
+                arr[x][y][2] = (p >> 8) & 0xff;
+                arr[x][y][3] = p & 0xff;
             }
         }
         return arr;
     }
 
-    // Convert a 3D array back to a BufferedImage.
+    // Convert a 3D int array back to a BufferedImage.
     private BufferedImage convertToBimage(int[][][] arr) {
         int width = arr.length;
         int height = arr[0].length;
@@ -97,12 +96,11 @@ public class Demo extends JPanel implements ActionListener {
         return img;
     }
 
-    // ----------- LAB 1 & LAB 2 Operations -----------
+    // ==================== LAB 1 & LAB 2 Operations ====================
 
-    // Negative filter: subtract each channel from 255.
+    // Negative (linear transform): s = 255 - r.
     private BufferedImage applyNegative(BufferedImage img) {
-        int width = img.getWidth();
-        int height = img.getHeight();
+        int width = img.getWidth(), height = img.getHeight();
         int[][][] arr = convertToArray(img);
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
@@ -114,10 +112,9 @@ public class Demo extends JPanel implements ActionListener {
         return convertToBimage(arr);
     }
 
-    // Rescale intensities: multiply by a factor (0–2), round, and clamp.
+    // Rescale intensities: s = round(r * factor), clamped to [0,255].
     private BufferedImage applyRescale(BufferedImage img, float factor) {
-        int width = img.getWidth();
-        int height = img.getHeight();
+        int width = img.getWidth(), height = img.getHeight();
         int[][][] arr = convertToArray(img);
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
@@ -129,11 +126,9 @@ public class Demo extends JPanel implements ActionListener {
         return convertToBimage(arr);
     }
 
-    // Exercise 2: Shift intensities.
-    // Add the provided integer shift to each pixel value and clamp the result.
+    // Shift intensities: s = r + shift, clamped to [0,255].
     private BufferedImage applyShift(BufferedImage img, int shift) {
-        int width = img.getWidth();
-        int height = img.getHeight();
+        int width = img.getWidth(), height = img.getHeight();
         int[][][] arr = convertToArray(img);
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
@@ -145,24 +140,17 @@ public class Demo extends JPanel implements ActionListener {
         return convertToBimage(arr);
     }
 
-    // Exercise 3: Shift and Rescale.
-    // For each pixel, add a random integer (here, chosen between -50 and 50),
-    // then determine the minimum and maximum pixel values for each channel,
-    // and linearly rescale the values to be in the range [0, 255].
+    // Shift+Rescale: add a random value (between -50 and 50) and then linearly rescale.
     private BufferedImage applyShiftAndRescale(BufferedImage img) {
-        int width = img.getWidth();
-        int height = img.getHeight();
+        int width = img.getWidth(), height = img.getHeight();
         int[][][] arr = convertToArray(img);
         Random rand = new Random();
-        // For channels red, green, blue (indices 1, 2, 3)
         int[] minChannel = {255, 255, 255};
         int[] maxChannel = {0, 0, 0};
-
-        // Add a random value to each pixel and compute min/max.
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
                 for (int c = 1; c <= 3; c++){
-                    int randomVal = rand.nextInt(101) - 50; // random integer between -50 and 50
+                    int randomVal = rand.nextInt(101) - 50;
                     arr[x][y][c] += randomVal;
                     minChannel[c-1] = Math.min(minChannel[c-1], arr[x][y][c]);
                     maxChannel[c-1] = Math.max(maxChannel[c-1], arr[x][y][c]);
@@ -184,9 +172,9 @@ public class Demo extends JPanel implements ActionListener {
         return convertToBimage(arr);
     }
 
-    // ----------- LAB 3 Operations -----------
+    // ==================== LAB 3 Operations ====================
 
-    // Arithmetic operations on two images: op = "add", "subtract", "multiply", or "divide".
+    // Arithmetic operations: perform "add", "subtract", "multiply", or "divide" on two images.
     private BufferedImage applyArithmeticOperation(BufferedImage img1, BufferedImage img2, String op) {
         int width = Math.min(img1.getWidth(), img2.getWidth());
         int height = Math.min(img1.getHeight(), img2.getHeight());
@@ -195,25 +183,16 @@ public class Demo extends JPanel implements ActionListener {
         int[][][] res = new int[width][height][4];
         int[] minChannel = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE};
         int[] maxChannel = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
-                res[x][y][0] = arr1[x][y][0]; // use alpha from first image
+                res[x][y][0] = arr1[x][y][0]; // alpha from first image
                 for (int c = 1; c <= 3; c++){
                     int v = 0;
                     switch(op) {
-                        case "add":
-                            v = arr1[x][y][c] + arr2[x][y][c];
-                            break;
-                        case "subtract":
-                            v = arr1[x][y][c] - arr2[x][y][c];
-                            break;
-                        case "multiply":
-                            v = arr1[x][y][c] * arr2[x][y][c];
-                            break;
-                        case "divide":
-                            v = (arr2[x][y][c] == 0) ? 0 : arr1[x][y][c] / arr2[x][y][c];
-                            break;
+                        case "add": v = arr1[x][y][c] + arr2[x][y][c]; break;
+                        case "subtract": v = arr1[x][y][c] - arr2[x][y][c]; break;
+                        case "multiply": v = arr1[x][y][c] * arr2[x][y][c]; break;
+                        case "divide": v = (arr2[x][y][c] == 0) ? 0 : arr1[x][y][c] / arr2[x][y][c]; break;
                     }
                     res[x][y][c] = v;
                     minChannel[c-1] = Math.min(minChannel[c-1], v);
@@ -221,7 +200,7 @@ public class Demo extends JPanel implements ActionListener {
                 }
             }
         }
-        // Linearly rescale each channel to [0, 255].
+        // Rescale result channels to [0,255]
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
                 for (int c = 1; c <= 3; c++){
@@ -237,7 +216,7 @@ public class Demo extends JPanel implements ActionListener {
         return convertToBimage(res);
     }
 
-    // Bitwise Boolean operations on two images: op = "and", "or", or "xor".
+    // Bitwise Boolean operations: "and", "or", "xor" on two images.
     private BufferedImage applyBitwiseOperation(BufferedImage img1, BufferedImage img2, String op) {
         int width = Math.min(img1.getWidth(), img2.getWidth());
         int height = Math.min(img1.getHeight(), img2.getHeight());
@@ -250,15 +229,9 @@ public class Demo extends JPanel implements ActionListener {
                 for (int c = 1; c <= 3; c++){
                     int v = 0;
                     switch(op) {
-                        case "and":
-                            v = arr1[x][y][c] & arr2[x][y][c];
-                            break;
-                        case "or":
-                            v = arr1[x][y][c] | arr2[x][y][c];
-                            break;
-                        case "xor":
-                            v = arr1[x][y][c] ^ arr2[x][y][c];
-                            break;
+                        case "and": v = arr1[x][y][c] & arr2[x][y][c]; break;
+                        case "or":  v = arr1[x][y][c] | arr2[x][y][c]; break;
+                        case "xor": v = arr1[x][y][c] ^ arr2[x][y][c]; break;
                     }
                     res[x][y][c] = clamp(v);
                 }
@@ -267,13 +240,12 @@ public class Demo extends JPanel implements ActionListener {
         return convertToBimage(res);
     }
 
-    // Bitwise NOT: apply ~ on each channel (mask with 0xff).
+    // Bitwise NOT: apply bitwise complement on each color channel.
     private BufferedImage applyBitwiseNot(BufferedImage img) {
         int width = img.getWidth(), height = img.getHeight();
         int[][][] arr = convertToArray(img);
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
-                // Leave alpha unchanged.
                 for (int c = 1; c <= 3; c++){
                     arr[x][y][c] = ~arr[x][y][c] & 0xff;
                 }
@@ -282,8 +254,7 @@ public class Demo extends JPanel implements ActionListener {
         return convertToBimage(arr);
     }
 
-    // ROI-based negative: use a black-and-white mask image as the ROI.
-    // For each pixel in the processed image, if the corresponding mask pixel (using its red channel) is above 128, apply negative.
+    // ROI-based negative: use a B/W mask image to select the region (if mask pixel > 128, apply negative).
     private BufferedImage applyROINegative(BufferedImage img, BufferedImage mask) {
         int width = Math.min(img.getWidth(), mask.getWidth());
         int height = Math.min(img.getHeight(), mask.getHeight());
@@ -291,8 +262,8 @@ public class Demo extends JPanel implements ActionListener {
         int[][][] arrMask = convertToArray(mask);
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
-                int maskVal = arrMask[x][y][1]; // assuming grayscale mask
-                if (maskVal > 128) { // ROI: apply negative
+                int maskVal = arrMask[x][y][1];
+                if (maskVal > 128) {
                     arrImg[x][y][1] = 255 - arrImg[x][y][1];
                     arrImg[x][y][2] = 255 - arrImg[x][y][2];
                     arrImg[x][y][3] = 255 - arrImg[x][y][3];
@@ -302,9 +273,95 @@ public class Demo extends JPanel implements ActionListener {
         return convertToBimage(arrImg);
     }
 
-    // ----------- Undo and Reset Methods -----------
+    // ==================== LAB 4 Operations ====================
 
-    // Push current processedImage onto the undo stack.
+    // (1) Negative Linear Transform – same as our negative filter.
+    private BufferedImage applyPointNegative(BufferedImage img) {
+        return applyNegative(img);
+    }
+
+    // (2) Logarithmic Transform: s = c * log(1 + r).
+    // If user does not provide a value for c, compute automatically as c = 255 / ln(256).
+    private BufferedImage applyLogTransform(BufferedImage img, Float userC) {
+        int width = img.getWidth(), height = img.getHeight();
+        int[][][] arr = convertToArray(img);
+        // Automatic computation:
+        float c = (userC != null) ? userC : (255f / (float)Math.log(256));
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                for (int channel = 1; channel <= 3; channel++){
+                    int r = arr[x][y][channel];
+                    int s = clamp(Math.round(c * (float)Math.log(1 + r)));
+                    arr[x][y][channel] = s;
+                }
+            }
+        }
+        return convertToBimage(arr);
+    }
+
+    // (3) Power-Law Transform: s = c * (r^p).
+    // Automatically compute c as 255 / (255^p) so that 255 maps to 255.
+    private BufferedImage applyPowerLawTransform(BufferedImage img, float p) {
+        int width = img.getWidth(), height = img.getHeight();
+        int[][][] arr = convertToArray(img);
+        float c = 255f / (float)Math.pow(255, p);
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                for (int channel = 1; channel <= 3; channel++){
+                    int r = arr[x][y][channel];
+                    int s = clamp(Math.round(c * (float)Math.pow(r, p)));
+                    arr[x][y][channel] = s;
+                }
+            }
+        }
+        return convertToBimage(arr);
+    }
+
+    // (4) Random Look-up Table Transform: generate a LUT of 256 random values and apply.
+    private BufferedImage applyRandomLUT(BufferedImage img) {
+        int[] lut = new int[256];
+        Random rand = new Random();
+        for (int i = 0; i < 256; i++){
+            lut[i] = rand.nextInt(256);
+        }
+        int width = img.getWidth(), height = img.getHeight();
+        int[][][] arr = convertToArray(img);
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                for (int channel = 1; channel <= 3; channel++){
+                    int r = arr[x][y][channel];
+                    arr[x][y][channel] = lut[r];
+                }
+            }
+        }
+        return convertToBimage(arr);
+    }
+
+    // (5) Bit-Plane Slicing: convert the image to grayscale, then extract the specified bit plane.
+    private BufferedImage applyBitPlaneSlicing(BufferedImage img, int bit) {
+        int width = img.getWidth(), height = img.getHeight();
+        // Create a new grayscale image.
+        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                // Compute grayscale value (average of R, G, B).
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                int gray = (r + g + b) / 3;
+                // Extract the bit.
+                int bitVal = ((gray >> bit) & 1) == 1 ? 255 : 0;
+                int newPixel = (255 << 24) | (bitVal << 16) | (bitVal << 8) | bitVal;
+                result.setRGB(x, y, newPixel);
+            }
+        }
+        return result;
+    }
+
+    // ==================== Undo & Reset ====================
+
+    // Backup the current processed image.
     private void backupForUndo() {
         if (processedImage != null)
             undoStack.push(copyImage(processedImage));
@@ -320,14 +377,14 @@ public class Demo extends JPanel implements ActionListener {
         }
     }
 
-    // Reset processedImage to the original and clear the undo stack.
+    // Reset processed image to the original and clear the undo stack.
     private void resetToOriginal() {
         processedImage = copyImage(originalImage);
         undoStack.clear();
         repaint();
     }
 
-    // ----------- Painting Method -----------
+    // ==================== Painting ====================
 
     @Override
     protected void paintComponent(Graphics g) {
@@ -338,12 +395,12 @@ public class Demo extends JPanel implements ActionListener {
             g.drawImage(processedImage, originalImage.getWidth() + gap, 0, this);
     }
 
-    // ----------- Action Handling -----------
+    // ==================== Action Handling ====================
 
     @Override
     public void actionPerformed(ActionEvent e) {
         String cmd = e.getActionCommand();
-        // File operations
+        // ----- File Operations -----
         if (cmd.equals("Open")) {
             JFileChooser chooser = new JFileChooser();
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
@@ -380,7 +437,7 @@ public class Demo extends JPanel implements ActionListener {
         } else if (cmd.equals("Undo")) {
             undo();
         }
-        // Lab1/Lab2 operations
+        // ----- Lab1/Lab2 Operations -----
         else if (cmd.equals("Original")) {
             backupForUndo();
             resetToOriginal();
@@ -421,12 +478,11 @@ public class Demo extends JPanel implements ActionListener {
             processedImage = applyShiftAndRescale(processedImage);
             repaint();
         }
-        // ----------- LAB 3 Operations -----------
+        // ----- Lab3 Operations -----
         else if (cmd.equals("Arithmetic Add") ||
                  cmd.equals("Arithmetic Subtract") ||
                  cmd.equals("Arithmetic Multiply") ||
                  cmd.equals("Arithmetic Divide")) {
-            // Load a second image.
             JFileChooser chooser = new JFileChooser();
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
@@ -460,7 +516,6 @@ public class Demo extends JPanel implements ActionListener {
         } else if (cmd.equals("Bitwise AND") ||
                    cmd.equals("Bitwise OR") ||
                    cmd.equals("Bitwise XOR")) {
-            // Load a second image.
             JFileChooser chooser = new JFileChooser();
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
@@ -487,7 +542,6 @@ public class Demo extends JPanel implements ActionListener {
                 }
             }
         } else if (cmd.equals("ROI Negative")) {
-            // Load a mask image.
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Select Mask Image (Black & White)");
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
@@ -502,11 +556,66 @@ public class Demo extends JPanel implements ActionListener {
                 }
             }
         }
+        // ----- Lab4 Operations -----
+        else if (cmd.equals("Point Negative")) {
+            backupForUndo();
+            processedImage = applyPointNegative(processedImage);
+            repaint();
+        } else if (cmd.equals("Logarithmic Transform")) {
+            String input = JOptionPane.showInputDialog(this, "Enter constant c (or leave blank for automatic):", "");
+            Float cVal = null;
+            if (input != null && !input.trim().isEmpty()) {
+                try {
+                    cVal = Float.parseFloat(input);
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid input for constant c. Using automatic value.");
+                }
+            }
+            backupForUndo();
+            processedImage = applyLogTransform(processedImage, cVal);
+            repaint();
+        } else if (cmd.equals("Power-Law Transform")) {
+            String input = JOptionPane.showInputDialog(this, "Enter power (p, from 0.01 to 25):", "1.0");
+            if (input != null) {
+                try {
+                    float p = Float.parseFloat(input);
+                    if (p < 0.01f || p > 25f) {
+                        JOptionPane.showMessageDialog(this, "Power must be between 0.01 and 25.");
+                    } else {
+                        backupForUndo();
+                        processedImage = applyPowerLawTransform(processedImage, p);
+                        repaint();
+                    }
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid input for power.");
+                }
+            }
+        } else if (cmd.equals("Random LUT Transform")) {
+            backupForUndo();
+            processedImage = applyRandomLUT(processedImage);
+            repaint();
+        } else if (cmd.equals("Bit-Plane Slicing")) {
+            String input = JOptionPane.showInputDialog(this, "Enter bit plane (0-7):", "0");
+            if (input != null) {
+                try {
+                    int bit = Integer.parseInt(input);
+                    if (bit < 0 || bit > 7) {
+                        JOptionPane.showMessageDialog(this, "Bit must be between 0 and 7.");
+                    } else {
+                        backupForUndo();
+                        processedImage = applyBitPlaneSlicing(processedImage, bit);
+                        repaint();
+                    }
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid input for bit.");
+                }
+            }
+        }
     }
 
-    // ----------- Main Method: Prompt for file then set up GUI -----------
+    // ==================== Main Method ====================
     public static void main(String[] args) {
-        // Prompt user to select an image file at startup.
+        // Prompt the user to select an image file at startup.
         JFileChooser fileChooser = new JFileChooser();
         if (fileChooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION)
             System.exit(0);
@@ -519,6 +628,7 @@ public class Demo extends JPanel implements ActionListener {
 
         // Build the menu bar.
         JMenuBar menuBar = new JMenuBar();
+
         // File menu.
         JMenu fileMenu = new JMenu("File");
         JMenuItem openItem = new JMenuItem("Open");
@@ -539,7 +649,7 @@ public class Demo extends JPanel implements ActionListener {
         editMenu.add(undoItem);
         menuBar.add(editMenu);
 
-        // Operations menu for Lab1 & Lab2.
+        // Lab1 & Lab2 Operations.
         JMenu opMenu = new JMenu("Operations");
         String[] ops = {"Original", "Negative", "Rescale", "Shift", "Shift+Rescale"};
         for (String op : ops) {
@@ -550,8 +660,8 @@ public class Demo extends JPanel implements ActionListener {
         }
         menuBar.add(opMenu);
 
-        // Lab3 Operations menu.
-        JMenu lab3Menu = new JMenu("Arithmetic Operations");
+        // Lab3 Operations.
+        JMenu lab3Menu = new JMenu("Lab3 Operations");
         String[] lab3Ops = {"Arithmetic Add", "Arithmetic Subtract", "Arithmetic Multiply", "Arithmetic Divide",
                             "Bitwise NOT", "Bitwise AND", "Bitwise OR", "Bitwise XOR", "ROI Negative"};
         for (String op : lab3Ops) {
@@ -561,6 +671,17 @@ public class Demo extends JPanel implements ActionListener {
             lab3Menu.add(item);
         }
         menuBar.add(lab3Menu);
+
+        // Lab4 Operations.
+        JMenu lab4Menu = new JMenu("Lab4 Operations");
+        String[] lab4Ops = {"Point Negative", "Logarithmic Transform", "Power-Law Transform", "Random LUT Transform", "Bit-Plane Slicing"};
+        for (String op : lab4Ops) {
+            JMenuItem item = new JMenuItem(op);
+            item.setActionCommand(op);
+            item.addActionListener(demo);
+            lab4Menu.add(item);
+        }
+        menuBar.add(lab4Menu);
 
         frame.setJMenuBar(menuBar);
         frame.pack();
