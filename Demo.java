@@ -23,8 +23,7 @@ public class Demo extends JPanel implements ActionListener {
             originalImage = ImageIO.read(imageFile);
             if (originalImage.getType() != BufferedImage.TYPE_INT_RGB) {
                 BufferedImage temp = new BufferedImage(
-                    originalImage.getWidth(), originalImage.getHeight(), 
-                    BufferedImage.TYPE_INT_RGB
+                    originalImage.getWidth(), originalImage.getHeight(), BufferedImage.TYPE_INT_RGB
                 );
                 Graphics g = temp.getGraphics();
                 g.drawImage(originalImage, 0, 0, null);
@@ -47,7 +46,7 @@ public class Demo extends JPanel implements ActionListener {
         return copy;
     }
 
-    // Preferred size of the panel to accommodate two images side by side.
+    // Preferred size: wide enough for two images side by side.
     @Override
     public Dimension getPreferredSize() {
         int width = originalImage.getWidth() + gap + processedImage.getWidth();
@@ -55,13 +54,14 @@ public class Demo extends JPanel implements ActionListener {
         return new Dimension(width, height);
     }
 
-    // Clamp a value to the range [0,255].
+    // Clamp a value to [0,255].
     private int clamp(int value) {
         return Math.max(0, Math.min(255, value));
     }
 
-    // Convert a BufferedImage to a 3D int array [width][height][4]
-    // where index 0 is alpha, 1 is red, 2 is green, 3 is blue.
+    // ------------------- Utility Methods -------------------
+
+    // Convert image to 3D array [width][height][4]: [alpha, red, green, blue].
     private int[][][] convertToArray(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
@@ -78,7 +78,7 @@ public class Demo extends JPanel implements ActionListener {
         return arr;
     }
 
-    // Convert a 3D int array back to a BufferedImage.
+    // Convert a 3D array back to a BufferedImage.
     private BufferedImage convertToBimage(int[][][] arr) {
         int width = arr.length;
         int height = arr[0].length;
@@ -358,6 +358,20 @@ public class Demo extends JPanel implements ActionListener {
         }
         return result;
     }
+    // For brevity, they are assumed to be present as in earlier labs.
+    private BufferedImage applyNegative(BufferedImage img) {
+        int width = img.getWidth(), height = img.getHeight();
+        int[][][] arr = convertToArray(img);
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                arr[x][y][1] = 255 - arr[x][y][1];
+                arr[x][y][2] = 255 - arr[x][y][2];
+                arr[x][y][3] = 255 - arr[x][y][3];
+            }
+        }
+        return convertToBimage(arr);
+    }
+    // ... (Other Lab1/Lab2 methods omitted for brevity)
 
     // ------------------- LAB 6: Convolution -------------------
     /**
@@ -421,8 +435,7 @@ public class Demo extends JPanel implements ActionListener {
         
         // Optionally normalize to [0,255].
         if (normalize) {
-            float minVal = Float.MAX_VALUE;
-            float maxVal = -Float.MAX_VALUE;
+            float minVal = Float.MAX_VALUE, maxVal = -Float.MAX_VALUE;
             for (int y = 0; y < height; y++){
                 for (int x = 0; x < width; x++){
                     if (conv[x][y] < minVal) minVal = conv[x][y];
@@ -438,7 +451,6 @@ public class Demo extends JPanel implements ActionListener {
             }
         }
         
-        // Create a new grayscale image from the convolution result.
         BufferedImage outImg = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < height; y++){
             for (int x = 0; x < width; x++){
@@ -449,7 +461,150 @@ public class Demo extends JPanel implements ActionListener {
         }
         return outImg;
     }
+    // ------------------- LAB 7: Order-statistics Filtering -------------------
+    // Helper: extract grayscale values from an image.
+    private int[][] getGrayMatrix(BufferedImage img) {
+        int width = img.getWidth();
+        int height = img.getHeight();
+        int[][] gray = new int[width][height];
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                gray[x][y] = (r + g + b) / 3;
+            }
+        }
+        return gray;
+    }
 
+    // Helper: create a grayscale image from a 2D array.
+    private BufferedImage createGrayImage(int[][] gray) {
+        int width = gray.length;
+        int height = gray[0].length;
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int val = clamp(gray[x][y]);
+                int rgb = (255 << 24) | (val << 16) | (val << 8) | val;
+                img.setRGB(x, y, rgb);
+            }
+        }
+        return img;
+    }
+
+    // Salt-and-Pepper Noise: randomly set some pixels to 0 or 255.
+    private BufferedImage addSaltAndPepperNoise(BufferedImage img, double noiseProb) {
+        int width = img.getWidth(), height = img.getHeight();
+        BufferedImage out = copyImage(img);
+        Random rand = new Random();
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                if (rand.nextDouble() < noiseProb) {
+                    boolean salt = rand.nextBoolean();
+                    int val = salt ? 255 : 0;
+                    int rgb = (255 << 24) | (val << 16) | (val << 8) | val;
+                    out.setRGB(x, y, rgb);
+                }
+            }
+        }
+        return out;
+    }
+
+    // Min Filter: replace each pixel with the minimum value in its neighborhood.
+    private BufferedImage applyMinFilter(BufferedImage img, int filterSize) {
+        int[][] gray = getGrayMatrix(img);
+        int width = img.getWidth(), height = img.getHeight();
+        int offset = filterSize / 2;
+        int[][] out = new int[width][height];
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int minVal = 255;
+                for (int j = -offset; j <= offset; j++){
+                    for (int i = -offset; i <= offset; i++){
+                        int xx = x + i, yy = y + j;
+                        if (xx >= 0 && xx < width && yy >= 0 && yy < height)
+                            minVal = Math.min(minVal, gray[xx][yy]);
+                    }
+                }
+                out[x][y] = minVal;
+            }
+        }
+        return createGrayImage(out);
+    }
+
+    // Max Filter: replace each pixel with the maximum value in its neighborhood.
+    private BufferedImage applyMaxFilter(BufferedImage img, int filterSize) {
+        int[][] gray = getGrayMatrix(img);
+        int width = img.getWidth(), height = img.getHeight();
+        int offset = filterSize / 2;
+        int[][] out = new int[width][height];
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int maxVal = 0;
+                for (int j = -offset; j <= offset; j++){
+                    for (int i = -offset; i <= offset; i++){
+                        int xx = x + i, yy = y + j;
+                        if (xx >= 0 && xx < width && yy >= 0 && yy < height)
+                            maxVal = Math.max(maxVal, gray[xx][yy]);
+                    }
+                }
+                out[x][y] = maxVal;
+            }
+        }
+        return createGrayImage(out);
+    }
+
+    // Midpoint Filter: replace each pixel with (min + max)/2 from its neighborhood.
+    private BufferedImage applyMidpointFilter(BufferedImage img, int filterSize) {
+        int[][] gray = getGrayMatrix(img);
+        int width = img.getWidth(), height = img.getHeight();
+        int offset = filterSize / 2;
+        int[][] out = new int[width][height];
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int minVal = 255, maxVal = 0;
+                for (int j = -offset; j <= offset; j++){
+                    for (int i = -offset; i <= offset; i++){
+                        int xx = x + i, yy = y + j;
+                        if (xx >= 0 && xx < width && yy >= 0 && yy < height) {
+                            int v = gray[xx][yy];
+                            minVal = Math.min(minVal, v);
+                            maxVal = Math.max(maxVal, v);
+                        }
+                    }
+                }
+                out[x][y] = (minVal + maxVal) / 2;
+            }
+        }
+        return createGrayImage(out);
+    }
+
+    // Median Filter: replace each pixel with the median of its neighborhood.
+    private BufferedImage applyMedianFilter(BufferedImage img, int filterSize) {
+        int[][] gray = getGrayMatrix(img);
+        int width = img.getWidth(), height = img.getHeight();
+        int offset = filterSize / 2;
+        int[][] out = new int[width][height];
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int n = filterSize * filterSize;
+                int[] vals = new int[n];
+                int count = 0;
+                for (int j = -offset; j <= offset; j++){
+                    for (int i = -offset; i <= offset; i++){
+                        int xx = x + i, yy = y + j;
+                        if (xx >= 0 && xx < width && yy >= 0 && yy < height)
+                            vals[count++] = gray[xx][yy];
+                    }
+                }
+                java.util.Arrays.sort(vals, 0, count);
+                out[x][y] = vals[count / 2];
+            }
+        }
+        return createGrayImage(out);
+    }
     // ==================== Undo & Reset ====================
 
     // Backup the current processed image.
@@ -528,7 +683,7 @@ public class Demo extends JPanel implements ActionListener {
         } else if (cmd.equals("Undo")) {
             undo();
         }
-        // ----- Lab1/Lab2 Operations -----
+        // ----- Lab1 & Lab2 Operations -----
         else if (cmd.equals("Original")) {
             backupForUndo();
             resetToOriginal();
@@ -825,6 +980,68 @@ public class Demo extends JPanel implements ActionListener {
                 }
             }
         }
+        // ----- Lab7 Operations -----
+        else if (cmd.equals("Salt-and-Pepper Noise")) {
+            String input = JOptionPane.showInputDialog(this, "Enter noise probability (0-1):", "0.05");
+            if (input != null) {
+                try {
+                    double noiseProb = Double.parseDouble(input);
+                    backupForUndo();
+                    processedImage = addSaltAndPepperNoise(processedImage, noiseProb);
+                    repaint();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid noise probability.");
+                }
+            }
+        } else if (cmd.equals("Min Filter")) {
+            String input = JOptionPane.showInputDialog(this, "Enter filter size (odd integer):", "3");
+            if (input != null) {
+                try {
+                    int size = Integer.parseInt(input);
+                    backupForUndo();
+                    processedImage = applyMinFilter(processedImage, size);
+                    repaint();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid filter size.");
+                }
+            }
+        } else if (cmd.equals("Max Filter")) {
+            String input = JOptionPane.showInputDialog(this, "Enter filter size (odd integer):", "3");
+            if (input != null) {
+                try {
+                    int size = Integer.parseInt(input);
+                    backupForUndo();
+                    processedImage = applyMaxFilter(processedImage, size);
+                    repaint();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid filter size.");
+                }
+            }
+        } else if (cmd.equals("Midpoint Filter")) {
+            String input = JOptionPane.showInputDialog(this, "Enter filter size (odd integer):", "3");
+            if (input != null) {
+                try {
+                    int size = Integer.parseInt(input);
+                    backupForUndo();
+                    processedImage = applyMidpointFilter(processedImage, size);
+                    repaint();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid filter size.");
+                }
+            }
+        } else if (cmd.equals("Median Filter")) {
+            String input = JOptionPane.showInputDialog(this, "Enter filter size (odd integer):", "3");
+            if (input != null) {
+                try {
+                    int size = Integer.parseInt(input);
+                    backupForUndo();
+                    processedImage = applyMedianFilter(processedImage, size);
+                    repaint();
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid filter size.");
+                }
+            }
+        }
     }
 
     // ------------------- Main Method -------------------
@@ -904,6 +1121,17 @@ public class Demo extends JPanel implements ActionListener {
         convItem.addActionListener(demo);
         lab6Menu.add(convItem);
         menuBar.add(lab6Menu);
+
+        // Lab7 Operations.
+        JMenu lab7Menu = new JMenu("Lab7 Operations");
+        String[] lab7Ops = {"Salt-and-Pepper Noise", "Min Filter", "Max Filter", "Midpoint Filter", "Median Filter"};
+        for (String op : lab7Ops) {
+            JMenuItem item = new JMenuItem(op);
+            item.setActionCommand(op);
+            item.addActionListener(demo);
+            lab7Menu.add(item);
+        }
+        menuBar.add(lab7Menu);
 
         frame.setJMenuBar(menuBar);
         frame.pack();
