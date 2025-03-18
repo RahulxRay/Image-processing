@@ -1076,8 +1076,8 @@ public class Demo extends JPanel implements ActionListener {
                     if (cmd.equals("Bitwise AND")) op = "and";
                     else if (cmd.equals("Bitwise OR")) op = "or";
                     else if (cmd.equals("Bitwise XOR")) op = "xor";
-                        processedImage = applyBitwiseOperation(processedImage, secondImage, op);
-                                    repaint();
+                    processedImage = applyBitwiseOperation(processedImage, secondImage, op);
+                    repaint();
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
@@ -1091,14 +1091,14 @@ public class Demo extends JPanel implements ActionListener {
                     BufferedImage maskImage = ImageIO.read(file);
                     backupForUndo();
                     processedImage = (roi != null)
-                    ? applyOnROI(processedImage, (img) -> applyBitwiseNot(img))
-                    : applyBitwiseNot(processedImage);
-                                    repaint();
+                        ? applyOnROI(processedImage, (img) -> applyROINegative(img, maskImage))
+                        : applyROINegative(processedImage, maskImage);
+                    repaint();
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
             }
-        }
+        }        
         // ----- Lab4 Operations -----
         else if (cmd.equals("Point Negative")) {
             backupForUndo();
@@ -1118,7 +1118,7 @@ public class Demo extends JPanel implements ActionListener {
             }
             backupForUndo();
             processedImage = applyLogTransform(processedImage, cVal);
-                    repaint();
+            repaint();
         } else if (cmd.equals("Power-Law Transform")) {
             String input = JOptionPane.showInputDialog(this, "Enter power (p, from 0.01 to 25):", "1.0");
             if (input != null) {
@@ -1281,7 +1281,7 @@ public class Demo extends JPanel implements ActionListener {
                 backupForUndo();
                 // Always normalize the convolution result.
                 processedImage = applyConvolution(processedImage, kernel, useAbs, true);
-                            repaint();
+                repaint();
             }
         }
     }
