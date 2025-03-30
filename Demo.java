@@ -1597,10 +1597,6 @@ public class Demo extends JPanel implements ActionListener {
         clearROIItem.setActionCommand("Clear ROI");
         clearROIItem.addActionListener(demo);
         editMenu.add(clearROIItem);
-        JMenuItem resetItem = new JMenuItem("Reset");
-        resetItem.setActionCommand("Reset");
-        resetItem.addActionListener(demo);
-        editMenu.add(resetItem);
         menuBar.add(editMenu);
 
         // Lab1 & Lab2 Operations.
