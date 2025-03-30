@@ -1185,20 +1185,9 @@ public class Demo extends JPanel implements ActionListener {
         } else if (cmd.equals("Bitwise AND") ||
                     cmd.equals("Bitwise OR") ||
                     cmd.equals("Bitwise XOR")) {
-            JFileChooser chooser = new JFileChooser();
-            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                try {
-                    BufferedImage secondImage = ImageIO.read(file);
-                    if (secondImage.getType() != BufferedImage.TYPE_INT_RGB) {
-                        BufferedImage temp = new BufferedImage(
-                            secondImage.getWidth(), secondImage.getHeight(), BufferedImage.TYPE_INT_RGB
-                        );
-                        Graphics g = temp.getGraphics();
-                        g.drawImage(secondImage, 0, 0, null);
-                        g.dispose();
-                        secondImage = temp;
-                    }
+                if (secondImage == null) {
+                    JOptionPane.showMessageDialog(this, "Please load a second image first.");
+                } else {
                     backupForUndo();
                     String op = "";
                     if (cmd.equals("Bitwise AND")) op = "and";
@@ -1206,10 +1195,7 @@ public class Demo extends JPanel implements ActionListener {
                     else if (cmd.equals("Bitwise XOR")) op = "xor";
                     processedImage = applyBitwiseOperation(processedImage, secondImage, op);
                     repaint();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
                 }
-            }
         } else if (cmd.equals("ROI Negative")) {
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Select Mask Image (Black & White)");
