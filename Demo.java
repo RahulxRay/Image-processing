@@ -57,7 +57,7 @@ public class Demo extends JPanel implements ActionListener {
                     img = temp;
                 }
             }
-            // Force resize to exactly 512 x 515
+            // Force resize to exactly 512 x 512
             originalImage = resizeImage(img);
             processedImage = copyImage(originalImage);
         } catch (IOException e) {
@@ -198,10 +198,10 @@ public class Demo extends JPanel implements ActionListener {
         }
     }
 
-    // Always resize any image to exactly 512 x 515.
+    // Always resize any image to exactly 512 x 512.
     private BufferedImage resizeImage(BufferedImage img) {
         int newWidth = 512;
-        int newHeight = 515;
+        int newHeight = 512;
         Image tmp = img.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
         BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
         Graphics2D g2d = resized.createGraphics();
@@ -1050,7 +1050,7 @@ public class Demo extends JPanel implements ActionListener {
                             img = temp;
                         }
                     }
-                    // Force resize to 512 x 515
+                    // Force resize to 512 x 512
                     img = resizeImage(img);
                     originalImage = img;
                     resetToOriginal();
