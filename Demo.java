@@ -9,47 +9,50 @@ import javax.imageio.*;
 import javax.swing.*;
 
 public class Demo extends JPanel implements ActionListener {
-    // Original image loaded at startup.
-    private BufferedImage originalImage;
-    // Processed image (result of operations).
-    private BufferedImage processedImage;
-    // Undo stack to store previous states.
+    // Three image slots.
+    private BufferedImage originalImage;    // Left image (first image)
+    private BufferedImage secondImage;      // Middle image (second image)
+    private BufferedImage processedImage;   // Right image (result of processing)
+    
+    // Undo stack for the processedImage.
     private Stack<BufferedImage> undoStack = new Stack<>();
-    // Gap (in pixels) between images when displayed.
+    // Gap between images.
     private final int gap = 10;
     
-    // ROI selection fields.
+    // ROI selection fields (applies to processedImage).
     private boolean selectingROI = false;
     private Point roiStart = null;
-    private Rectangle roi = null; // ROI relative to the processed image area
-
-    // Constructor: load the image from file.
-    public Demo(File imageFile) {
+    private Rectangle roi = null; // ROI relative to the processedImage
+    
+    // Log area (set by the main frame)
+    private JTextArea logArea;
+    
+    // Constructor: load the original image from file.
+    public Demo(File imageFile, JTextArea logArea) {
+        this.logArea = logArea;
         try {
             originalImage = ImageIO.read(imageFile);
             if (originalImage.getType() != BufferedImage.TYPE_INT_RGB) {
-                BufferedImage temp = new BufferedImage(
-                    originalImage.getWidth(), originalImage.getHeight(), BufferedImage.TYPE_INT_RGB
-                );
+                BufferedImage temp = new BufferedImage(originalImage.getWidth(), originalImage.getHeight(), BufferedImage.TYPE_INT_RGB);
                 Graphics g = temp.getGraphics();
                 g.drawImage(originalImage, 0, 0, null);
                 g.dispose();
                 originalImage = temp;
             }
+            // Initially, set processedImage to a copy of originalImage.
             processedImage = copyImage(originalImage);
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Image could not be read.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Original image could not be read.", "Error", JOptionPane.ERROR_MESSAGE);
             System.exit(1);
         }
         
-        // Add mouse listeners for ROI selection.
+        // Add mouse listeners for ROI selection on the processed image.
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                int offsetX = originalImage.getWidth() + gap;
-                // Only allow ROI selection if the click is in the processed image area.
+                // ROI selection only applies in the processedImage area (right panel)
+                int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
                 if (selectingROI && e.getX() >= offsetX) {
-                    // Get the point relative to the processed image.
                     roiStart = new Point(e.getX() - offsetX, e.getY());
                     roi = new Rectangle(roiStart);
                 }
@@ -57,21 +60,21 @@ public class Demo extends JPanel implements ActionListener {
             @Override
             public void mouseReleased(MouseEvent e) {
                 if (selectingROI && roiStart != null) {
-                    int offsetX = originalImage.getWidth() + gap;
+                    int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
                     Point currentPoint = new Point(e.getX() - offsetX, e.getY());
                     updateROI(currentPoint);
                     selectingROI = false;
                     repaint();
+                    log("ROI selected: " + roi);
                 }
             }
         });
         
-
         addMouseMotionListener(new MouseMotionAdapter() {
             @Override
             public void mouseDragged(MouseEvent e) {
                 if (selectingROI && roiStart != null) {
-                    int offsetX = originalImage.getWidth() + gap;
+                    int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
                     Point currentPoint = new Point(e.getX() - offsetX, e.getY());
                     updateROI(currentPoint);
                     repaint();
@@ -80,7 +83,7 @@ public class Demo extends JPanel implements ActionListener {
         });
     }
     
-    // And update the updateROI method as follows:
+    // Update ROI based on current mouse point (relative to processed image)
     private void updateROI(Point currentPoint) {
         int newX = Math.min(roiStart.x, currentPoint.x);
         int newY = Math.min(roiStart.y, currentPoint.y);
@@ -88,8 +91,8 @@ public class Demo extends JPanel implements ActionListener {
         int newH = Math.abs(currentPoint.y - roiStart.y);
         roi = new Rectangle(newX, newY, newW, newH);
     }
-
-    // Create a deep copy of a BufferedImage.
+    
+    // Helper: make a deep copy of a BufferedImage.
     private BufferedImage copyImage(BufferedImage img) {
         BufferedImage copy = new BufferedImage(img.getWidth(), img.getHeight(), img.getType());
         Graphics g = copy.getGraphics();
@@ -98,22 +101,35 @@ public class Demo extends JPanel implements ActionListener {
         return copy;
     }
     
-    // Preferred size: wide enough for two images side by side.
-    @Override
-    public Dimension getPreferredSize() {
-        int width = originalImage.getWidth() + gap + processedImage.getWidth();
-        int height = Math.max(originalImage.getHeight(), processedImage.getHeight());
-        return new Dimension(width, height);
+    // Methods to get widths of left and middle images (for layout calculations).
+    private int getLeftImageWidth() {
+        return originalImage != null ? originalImage.getWidth() : 0;
+    }
+    private int getMiddleImageWidth() {
+        // If secondImage is not loaded, use a placeholder width equal to originalImage.
+        return secondImage != null ? secondImage.getWidth() : (originalImage != null ? originalImage.getWidth() : 0);
     }
     
-    // Clamp a value to [0,255].
+    // Preferred size: width = sum of widths of three images + 2 gaps, height = max of heights.
+    @Override
+    public Dimension getPreferredSize() {
+        int w1 = getLeftImageWidth();
+        int w2 = getMiddleImageWidth();
+        int w3 = processedImage != null ? processedImage.getWidth() : 0;
+        int totalWidth = w1 + gap + w2 + gap + w3;
+        int h1 = originalImage != null ? originalImage.getHeight() : 0;
+        int h2 = secondImage != null ? secondImage.getHeight() : 0;
+        int h3 = processedImage != null ? processedImage.getHeight() : 0;
+        int maxHeight = Math.max(h1, Math.max(h2, h3));
+        return new Dimension(totalWidth, maxHeight);
+    }
+    
+    // Clamp value.
     private int clamp(int value) {
         return Math.max(0, Math.min(255, value));
     }
     
-    // ------------------- Utility Methods -------------------
-
-    // Convert image to 3D array [width][height][4]: [alpha, red, green, blue].
+    // ------------------- Utility Methods (Image conversion) -------------------
     private int[][][] convertToArray(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
@@ -130,7 +146,6 @@ public class Demo extends JPanel implements ActionListener {
         return arr;
     }
     
-    // Convert a 3D array back to a BufferedImage.
     private BufferedImage convertToBimage(int[][][] arr) {
         int width = arr.length;
         int height = arr[0].length;
@@ -148,9 +163,9 @@ public class Demo extends JPanel implements ActionListener {
         return img;
     }
     
-   // ==================== LAB 1 & LAB 2 Operations ====================
-
-    // Negative (linear transform): s = 255 - r.
+    // ------------------- Example Processing Functions -------------------
+    // (For brevity, only a few functions are shown. You would wrap the rest similarly.)
+    
     private BufferedImage applyNegative(BufferedImage img) {
         int width = img.getWidth(), height = img.getHeight();
         int[][][] arr = convertToArray(img);
@@ -163,7 +178,7 @@ public class Demo extends JPanel implements ActionListener {
         }
         return convertToBimage(arr);
     }
-
+    
         // Rescale intensities: s = round(r * factor), clamped to [0,255].
         private BufferedImage applyRescale(BufferedImage img, float factor) {
             int width = img.getWidth(), height = img.getHeight();
@@ -856,20 +871,31 @@ public class Demo extends JPanel implements ActionListener {
         }
     
     // ------------------- ROI Wrapper -------------------
-    // Apply a processing function only on the ROI (if selected).
+    // Applies a function to the ROI subimage if ROI is defined; otherwise, applies to full image.
     private BufferedImage applyOnROI(BufferedImage img, Function<BufferedImage, BufferedImage> func) {
         if (roi == null) {
             return func.apply(img);
         } else {
-            // Extract ROI subimage (note: roi is relative to the processed image).
             BufferedImage sub = img.getSubimage(roi.x, roi.y, roi.width, roi.height);
             BufferedImage processedSub = func.apply(sub);
-            // Create a copy of the full image.
             BufferedImage result = copyImage(img);
             Graphics g = result.getGraphics();
             g.drawImage(processedSub, roi.x, roi.y, null);
             g.dispose();
             return result;
+        }
+    }
+    
+    // Helper: Use this method to automatically apply a function to processedImage with ROI checking.
+    private BufferedImage processWithROI(Function<BufferedImage, BufferedImage> func) {
+        return (roi != null) ? applyOnROI(processedImage, func) : func.apply(processedImage);
+    }
+    
+    // ------------------- Logging -------------------
+    private void log(String message) {
+        if (logArea != null) {
+            logArea.append(message + "\n");
+            logArea.setCaretPosition(logArea.getDocument().getLength());
         }
     }
     
@@ -879,60 +905,68 @@ public class Demo extends JPanel implements ActionListener {
             undoStack.push(copyImage(processedImage));
     }
     
-    // Undo the last operation.
     private void undo() {
         if (!undoStack.isEmpty()) {
             processedImage = undoStack.pop();
             repaint();
+            log("Undo performed.");
         } else {
             JOptionPane.showMessageDialog(this, "Nothing to undo!");
         }
     }
     
-    // Reset processed image to the original and clear the undo stack.
     private void resetToOriginal() {
         processedImage = copyImage(originalImage);
         undoStack.clear();
-        roi = null;  // also clear ROI
+        roi = null;
+        log("Reset to original.");
         repaint();
     }
     
-    // ==================== Painting ====================
-
+    // ------------------- Painting -------------------
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        // Draw original image on left.
-        if (originalImage != null)
-            g.drawImage(originalImage, 0, 0, this);
-        // Draw processed image on right.
-        if (processedImage != null)
-            g.drawImage(processedImage, originalImage.getWidth() + gap, 0, this);
-        // If ROI is selected, draw a red rectangle on top of the processed image.
+        int x = 0;
+        // Draw left image (originalImage)
+        if (originalImage != null) {
+            g.drawImage(originalImage, x, 0, this);
+            x += originalImage.getWidth() + gap;
+        }
+        // Draw middle image (secondImage); if null, draw a placeholder border.
+        if (secondImage != null) {
+            g.drawImage(secondImage, x, 0, this);
+        } else {
+            g.setColor(Color.GRAY);
+            g.drawRect(x, 0, originalImage.getWidth(), originalImage.getHeight());
+            g.drawString("Load second image", x + 10, 20);
+        }
+        x += getMiddleImageWidth() + gap;
+        // Draw right image (processedImage)
+        if (processedImage != null) {
+            g.drawImage(processedImage, x, 0, this);
+        }
+        // Draw ROI rectangle (relative to processedImage area)
         if (roi != null) {
             Graphics2D g2d = (Graphics2D) g;
             g2d.setColor(Color.RED);
-            int offsetX = originalImage.getWidth() + gap;
+            int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
             g2d.drawRect(offsetX + roi.x, roi.y, roi.width, roi.height);
         }
     }
     
-    // ==================== Action Handling ====================
-
+    // ------------------- Action Handling -------------------
     @Override
     public void actionPerformed(ActionEvent e) {
         String cmd = e.getActionCommand();
-        // ----- File Operations -----
-        if (cmd.equals("Open")) {
+        if (cmd.equals("Open Original")) {
             JFileChooser chooser = new JFileChooser();
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
                 try {
                     BufferedImage img = ImageIO.read(file);
                     if (img.getType() != BufferedImage.TYPE_INT_RGB) {
-                        BufferedImage temp = new BufferedImage(
-                            img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB
-                        );
+                        BufferedImage temp = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
                         Graphics g = temp.getGraphics();
                         g.drawImage(img, 0, 0, null);
                         g.dispose();
@@ -940,8 +974,8 @@ public class Demo extends JPanel implements ActionListener {
                     }
                     originalImage = img;
                     resetToOriginal();
-                    revalidate();
                     repaint();
+                    log("Loaded original image.");
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
@@ -1022,20 +1056,12 @@ public class Demo extends JPanel implements ActionListener {
                     cmd.equals("Arithmetic Subtract") ||
                     cmd.equals("Arithmetic Multiply") ||
                     cmd.equals("Arithmetic Divide")) {
-            JFileChooser chooser = new JFileChooser();
-            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                try {
-                    BufferedImage secondImage = ImageIO.read(file);
-                    if (secondImage.getType() != BufferedImage.TYPE_INT_RGB) {
-                        BufferedImage temp = new BufferedImage(
-                            secondImage.getWidth(), secondImage.getHeight(), BufferedImage.TYPE_INT_RGB
-                        );
-                        Graphics g = temp.getGraphics();
-                        g.drawImage(secondImage, 0, 0, null);
-                        g.dispose();
-                        secondImage = temp;
-                    }
+            // JFileChooser chooser = new JFileChooser();
+            // if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                // File file = chooser.getSelectedFile();
+                if (secondImage == null) {
+                    JOptionPane.showMessageDialog(this, "Please load a second image first.");
+                } else {
                     backupForUndo();
                     String op = "";
                     if (cmd.equals("Arithmetic Add")) op = "add";
@@ -1044,10 +1070,8 @@ public class Demo extends JPanel implements ActionListener {
                     else if (cmd.equals("Arithmetic Divide")) op = "divide";
                     processedImage = applyArithmeticOperation(processedImage, secondImage, op);
                     repaint();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
                 }
-            }
+            // }
         } else if (cmd.equals("Bitwise NOT")) {
             backupForUndo();
             processedImage = (roi != null)
@@ -1284,7 +1308,6 @@ public class Demo extends JPanel implements ActionListener {
                 repaint();
             }
         }
-    }
         // ----- Lab7 Operations -----
         else if (cmd.equals("Salt-and-Pepper Noise")) {
             String input = JOptionPane.showInputDialog(this, "Enter noise probability (0-1):", "0.05");
@@ -1420,19 +1443,97 @@ public class Demo extends JPanel implements ActionListener {
             processedImage = (roi != null) ? applyOnROI(processedImage, (img) -> applyNegative(img)) : applyNegative(processedImage);
             repaint();
         }
-        // (Other processing functions can be similarly wrapped with applyOnROI.)
-        // ... (Other menu commands for Lab3..Lab8 would be here)
+    }else if (cmd.equals("Load Second Image")) {
+            JFileChooser chooser = new JFileChooser();
+            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File file = chooser.getSelectedFile();
+                try {
+                    secondImage = ImageIO.read(file);
+                    if (secondImage.getType() != BufferedImage.TYPE_INT_RGB) {
+                        BufferedImage temp = new BufferedImage(secondImage.getWidth(), secondImage.getHeight(), BufferedImage.TYPE_INT_RGB);
+                        Graphics g = temp.getGraphics();
+                        g.drawImage(secondImage, 0, 0, null);
+                        g.dispose();
+                        secondImage = temp;
+                    }
+                    repaint();
+                    log("Loaded second image.");
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
+        }
+        // For arithmetic operations (using originalImage and secondImage)
+        else if (cmd.equals("Arithmetic Add")) {
+            if (secondImage == null) {
+                JOptionPane.showMessageDialog(this, "Please load a second image first.");
+            } else {
+                backupForUndo();
+                processedImage = applyArithmeticOperation(originalImage, secondImage, "add");
+                repaint();
+                log("Performed arithmetic addition on original and second images.");
+            }
+        }
+        // You can add similar items for subtract, multiply, divide and bitwise operations.
+        // For operations on processedImage with ROI, use processWithROI() as shown:
+        else if (cmd.equals("Negative")) {
+            backupForUndo();
+            processedImage = processWithROI(img -> applyNegative(img));
+            repaint();
+            log("Applied negative operation.");
+        }
+        else if (cmd.equals("Rescale")) {
+            String input = JOptionPane.showInputDialog(this, "Enter scaling factor (0 to 2):", "1.0");
+            if (input != null) {
+                try {
+                    float factor = Float.parseFloat(input);
+                    backupForUndo();
+                    processedImage = processWithROI(img -> applyRescale(img, factor));
+                    repaint();
+                    log("Applied rescale operation with factor " + factor);
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid scaling factor.");
+                }
+            }
+        }
+        // ... (Include similar blocks for other operations, wrapping with processWithROI)
+        else if (cmd.equals("Reset")) {
+            resetToOriginal();
+        }
+        // Logging example for Histogram Equalisation:
+        else if (cmd.equals("Histogram Equalisation")) {
+            backupForUndo();
+            processedImage = processWithROI(img -> histogramEqualisation(img));
+            repaint();
+            log("Applied histogram equalisation.");
+        }
+        // ROI selection commands:
+        else if (cmd.equals("Select ROI")) {
+            selectingROI = true;
+            roi = null;
+            JOptionPane.showMessageDialog(this, "Click and drag on the processed image to select ROI.");
+            log("ROI selection mode entered.");
+        } else if (cmd.equals("Clear ROI")) {
+            roi = null;
+            repaint();
+            log("ROI cleared.");
+        }
     }
     
     // ------------------- Main Method -------------------
     public static void main(String[] args) {
-        // Prompt the user to select an image file at startup.
+        // Create a log area.
+        JTextArea logArea = new JTextArea(5, 40);
+        logArea.setEditable(false);
+        JScrollPane logScroll = new JScrollPane(logArea);
+        
+        // Prompt for the original image.
         JFileChooser fileChooser = new JFileChooser();
         if (fileChooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION)
             System.exit(0);
         File selectedFile = fileChooser.getSelectedFile();
         
-        Demo demo = new Demo(selectedFile);
+        Demo demo = new Demo(selectedFile, logArea);
         JFrame frame = new JFrame("Image Processing Demo");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.getContentPane().add(demo, BorderLayout.CENTER);
@@ -1442,11 +1543,15 @@ public class Demo extends JPanel implements ActionListener {
         
         // File menu.
         JMenu fileMenu = new JMenu("File");
-        JMenuItem openItem = new JMenuItem("Open");
-        openItem.setActionCommand("Open");
-        openItem.addActionListener(demo);
-        fileMenu.add(openItem);
-        JMenuItem saveItem = new JMenuItem("Save");
+        JMenuItem openOriginalItem = new JMenuItem("Open Original");
+        openOriginalItem.setActionCommand("Open Original");
+        openOriginalItem.addActionListener(demo);
+        fileMenu.add(openOriginalItem);
+        JMenuItem loadSecondItem = new JMenuItem("Load Second Image");
+        loadSecondItem.setActionCommand("Load Second Image");
+        loadSecondItem.addActionListener(demo);
+        fileMenu.add(loadSecondItem);
+        JMenuItem saveItem = new JMenuItem("Save Processed");
         saveItem.setActionCommand("Save");
         saveItem.addActionListener(demo);
         fileMenu.add(saveItem);
@@ -1466,8 +1571,12 @@ public class Demo extends JPanel implements ActionListener {
         clearROIItem.setActionCommand("Clear ROI");
         clearROIItem.addActionListener(demo);
         editMenu.add(clearROIItem);
+        JMenuItem resetItem = new JMenuItem("Reset");
+        resetItem.setActionCommand("Reset");
+        resetItem.addActionListener(demo);
+        editMenu.add(resetItem);
         menuBar.add(editMenu);
-        
+
         // Lab1 & Lab2 Operations.
         JMenu opMenu = new JMenu("Operations");
         String[] ops = {"Original", "Negative", "Rescale", "Shift", "Shift+Rescale"};
@@ -1542,8 +1651,27 @@ public class Demo extends JPanel implements ActionListener {
             lab8Menu.add(item);
         }
         menuBar.add(lab8Menu);
+        // Operations menu (you can add additional menus for Lab3...Lab8 as needed).
+        // JMenu opMenu = new JMenu("Operations");
+        JMenuItem negativeItem = new JMenuItem("Negative");
+        negativeItem.setActionCommand("Negative");
+        negativeItem.addActionListener(demo);
+        opMenu.add(negativeItem);
+        JMenuItem rescaleItem = new JMenuItem("Rescale");
+        rescaleItem.setActionCommand("Rescale");
+        rescaleItem.addActionListener(demo);
+        opMenu.add(rescaleItem);
+        menuBar.add(opMenu);
         
+        // Build the main frame.
+        // JFrame frame = new JFrame("Image Processing Demo (3-Image + Log)");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        // Use a BorderLayout: center for images, south for log.
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.add(demo, BorderLayout.CENTER);
+        mainPanel.add(logScroll, BorderLayout.SOUTH);
         frame.setJMenuBar(menuBar);
+        frame.getContentPane().add(mainPanel);
         frame.pack();
         frame.setVisible(true);
     }
