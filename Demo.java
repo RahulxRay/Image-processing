@@ -31,15 +31,34 @@ public class Demo extends JPanel implements ActionListener {
     public Demo(File imageFile, JTextArea logArea) {
         this.logArea = logArea;
         try {
-            originalImage = ImageIO.read(imageFile);
-            if (originalImage.getType() != BufferedImage.TYPE_INT_RGB) {
-                BufferedImage temp = new BufferedImage(originalImage.getWidth(), originalImage.getHeight(), BufferedImage.TYPE_INT_RGB);
-                Graphics g = temp.getGraphics();
-                g.drawImage(originalImage, 0, 0, null);
-                g.dispose();
-                originalImage = temp;
+            BufferedImage img = null;
+            // Check if the file is RAW (by its extension)
+            if (imageFile.getName().toLowerCase().endsWith(".raw")) {
+                String wStr = JOptionPane.showInputDialog(this, "Enter width for RAW image (leave blank to guess):", "");
+                String hStr = JOptionPane.showInputDialog(this, "Enter height for RAW image (leave blank to guess):", "");
+                int w, h;
+                if (wStr == null || hStr == null || wStr.trim().isEmpty() || hStr.trim().isEmpty()) {
+                    Dimension d = guessDimensions(imageFile);
+                    w = d.width;
+                    h = d.height;
+                    log("Guessed RAW dimensions: " + w + " x " + h);
+                } else {
+                    w = Integer.parseInt(wStr);
+                    h = Integer.parseInt(hStr);
+                }
+                img = readRawImage(imageFile, w, h);
+            } else {
+                img = ImageIO.read(imageFile);
+                if (img.getType() != BufferedImage.TYPE_INT_RGB) {
+                    BufferedImage temp = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
+                    Graphics g = temp.getGraphics();
+                    g.drawImage(img, 0, 0, null);
+                    g.dispose();
+                    img = temp;
+                }
             }
-            // Initially, set processedImage to a copy of originalImage.
+            // Force resize to exactly 512 x 515
+            originalImage = resizeImage(img);
             processedImage = copyImage(originalImage);
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this, "Original image could not be read.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -162,6 +181,57 @@ public class Demo extends JPanel implements ActionListener {
         }
         return img;
     }
+    // If no dimensions are provided, try to guess dimensions from the file size.
+    // This method assumes the image is square if possible; if not, it uses the floor of sqrt(fileSize) as width.
+    private Dimension guessDimensions(File file) {
+        long size = file.length();
+        int dim = (int) Math.round(Math.sqrt(size));
+        // If the file size is a perfect square, assume a square image.
+        if (dim * dim == size) {
+            return new Dimension(dim, dim);
+        } else if (size % dim == 0) {
+            // Otherwise, assume width = dim and height = file size / dim
+            return new Dimension(dim, (int) (size / dim));
+        } else {
+            // Fallback: assume square (user may need to adjust)
+            return new Dimension(dim, dim);
+        }
+    }
+
+    // Always resize any image to exactly 512 x 515.
+    private BufferedImage resizeImage(BufferedImage img) {
+        int newWidth = 512;
+        int newHeight = 515;
+        Image tmp = img.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+        BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = resized.createGraphics();
+        g2d.drawImage(tmp, 0, 0, null);
+        g2d.dispose();
+        return resized;
+    }
+
+    private BufferedImage readRawImage(File file, int width, int height) throws IOException {
+        int size = width * height;
+        byte[] bytes = new byte[size];
+        try (FileInputStream fis = new FileInputStream(file)) {
+            int read = fis.read(bytes);
+            if (read != size) {
+                throw new IOException("Raw file size does not match expected dimensions.");
+            }
+        }
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int val = bytes[y * width + x] & 0xff;
+                int rgb = (255 << 24) | (val << 16) | (val << 8) | val;
+                img.setRGB(x, y, rgb);
+            }
+        }
+        return img;
+    }
+
+
+
     
    // ==================== LAB 1 & LAB 2 Operations ====================
     
@@ -425,7 +495,6 @@ public class Demo extends JPanel implements ActionListener {
             }
             return result;
         }
-        // ... (Other Lab1/Lab2 methods omitted for brevity)
     
         // ------------------- LAB 6: Convolution -------------------
         /**
@@ -968,23 +1037,41 @@ public class Demo extends JPanel implements ActionListener {
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
                 try {
-                    BufferedImage img = ImageIO.read(file);
-                    if (img.getType() != BufferedImage.TYPE_INT_RGB) {
-                        BufferedImage temp = new BufferedImage(
-                            img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB
-                        );
-                        Graphics g = temp.getGraphics();
-                        g.drawImage(img, 0, 0, null);
-                        g.dispose();
-                        img = temp;
+                    BufferedImage img = null;
+                    // Check if the file is RAW (by extension)
+                    if (file.getName().toLowerCase().endsWith(".raw")) {
+                        String wStr = JOptionPane.showInputDialog(this, "Enter width for RAW image (leave blank to guess):", "");
+                        String hStr = JOptionPane.showInputDialog(this, "Enter height for RAW image (leave blank to guess):", "");
+                        int w, h;
+                        if (wStr.trim().isEmpty() || hStr.trim().isEmpty()) {
+                            Dimension d = guessDimensions(file);
+                            w = d.width;
+                            h = d.height;
+                            log("Guessed RAW dimensions: " + w + " x " + h);
+                        } else {
+                            w = Integer.parseInt(wStr);
+                            h = Integer.parseInt(hStr);
+                        }
+                        img = readRawImage(file, w, h);
+                    }else {
+                        img = ImageIO.read(file);
+                        if (img.getType() != BufferedImage.TYPE_INT_RGB) {
+                            BufferedImage temp = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
+                            Graphics g = temp.getGraphics();
+                            g.drawImage(img, 0, 0, null);
+                            g.dispose();
+                            img = temp;
+                        }
                     }
+                    // Force resize to 512 x 515
+                    img = resizeImage(img);
                     originalImage = img;
                     resetToOriginal();
                     revalidate();
                     repaint();
                     log("Loaded original image.");
-                } catch (IOException ex) {
-                    ex.printStackTrace();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Error loading image: " + ex.getMessage());
                 }
             }
         } else if (cmd.equals("Save")) {
@@ -1456,18 +1543,38 @@ public class Demo extends JPanel implements ActionListener {
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
                 try {
-                    secondImage = ImageIO.read(file);
-                    if (secondImage.getType() != BufferedImage.TYPE_INT_RGB) {
-                        BufferedImage temp = new BufferedImage(secondImage.getWidth(), secondImage.getHeight(), BufferedImage.TYPE_INT_RGB);
-                        Graphics g = temp.getGraphics();
-                        g.drawImage(secondImage, 0, 0, null);
-                        g.dispose();
-                        secondImage = temp;
+                    BufferedImage img = null;
+                    if (file.getName().toLowerCase().endsWith(".raw")) {
+                        String wStr = JOptionPane.showInputDialog(this, "Enter width for RAW image (leave blank to guess):", "");
+                        String hStr = JOptionPane.showInputDialog(this, "Enter height for RAW image (leave blank to guess):", "");
+                        int w, h;
+                        if (wStr.trim().isEmpty() || hStr.trim().isEmpty()) {
+                            Dimension d = guessDimensions(file);
+                            w = d.width;
+                            h = d.height;
+                            log("Guessed RAW dimensions: " + w + " x " + h);
+                        } else {
+                            w = Integer.parseInt(wStr);
+                            h = Integer.parseInt(hStr);
+                        }
+                        img = readRawImage(file, w, h);
+                    } else {
+                        img = ImageIO.read(file);
+                        if (img.getType() != BufferedImage.TYPE_INT_RGB) {
+                            BufferedImage temp = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
+                            Graphics g = temp.getGraphics();
+                            g.drawImage(img, 0, 0, null);
+                            g.dispose();
+                            img = temp;
+                        }
                     }
+                    // Resize second image as well.
+                    img = resizeImage(img);
+                    secondImage = img;
                     repaint();
                     log("Loaded second image.");
-                } catch (IOException ex) {
-                    ex.printStackTrace();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Error loading image: " + ex.getMessage());
                 }
             }
         }
