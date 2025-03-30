@@ -391,25 +391,6 @@ public class Demo extends JPanel implements ActionListener {
             return convertToBimage(arr);
         }
     
-        // ROI-based negative: use a B/W mask image to select the region (if mask pixel > 128, apply negative).
-        private BufferedImage applyROINegative(BufferedImage img, BufferedImage mask) {
-            int width = Math.min(img.getWidth(), mask.getWidth());
-            int height = Math.min(img.getHeight(), mask.getHeight());
-            int[][][] arrImg = convertToArray(img);
-            int[][][] arrMask = convertToArray(mask);
-            for (int y = 0; y < height; y++){
-                for (int x = 0; x < width; x++){
-                    int maskVal = arrMask[x][y][1];
-                    if (maskVal > 128) {
-                        arrImg[x][y][1] = 255 - arrImg[x][y][1];
-                        arrImg[x][y][2] = 255 - arrImg[x][y][2];
-                        arrImg[x][y][3] = 255 - arrImg[x][y][3];
-                    }
-                }
-            }
-            return convertToBimage(arrImg);
-        }
-    
         // ==================== LAB 4 Operations ====================
     
         // (1) Negative Linear Transform – same as our negative filter.
@@ -968,11 +949,6 @@ public class Demo extends JPanel implements ActionListener {
         }
     }
     
-    // Helper: Use this method to automatically apply a function to processedImage with ROI checking.
-    private BufferedImage processWithROI(Function<BufferedImage, BufferedImage> func) {
-        return (roi != null) ? applyOnROI(processedImage, func) : func.apply(processedImage);
-    }
-    
     // ------------------- Logging -------------------
     private void log(String message) {
         if (logArea != null) {
@@ -1196,24 +1172,7 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = applyBitwiseOperation(processedImage, secondImage, op);
                     repaint();
                 }
-        } else if (cmd.equals("ROI Negative")) {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setDialogTitle("Select Mask Image (Black & White)");
-            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                try {
-                    BufferedImage maskImage = ImageIO.read(file);
-                    backupForUndo();
-                    processedImage = (roi != null)
-                        ? applyOnROI(processedImage, (img) -> applyROINegative(img, maskImage))
-                        : applyROINegative(processedImage, maskImage);
-                    repaint();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
-        }        
-        // ----- Lab4 Operations -----
+        }        // ----- Lab4 Operations -----
         else if (cmd.equals("Point Negative")) {
             backupForUndo();
             processedImage = (roi != null)
