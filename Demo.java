@@ -517,68 +517,79 @@ public class Demo extends JPanel implements ActionListener {
             int kCenterX = kCols / 2;
             int kCenterY = kRows / 2;
             
-            // Convert the image to grayscale (using simple average)
-            int[][] gray = new int[width][height];
-            for (int y = 0; y < height; y++){
-                for (int x = 0; x < width; x++){
-                    int rgb = img.getRGB(x, y);
-                    int r = (rgb >> 16) & 0xff;
-                    int g = (rgb >> 8) & 0xff;
-                    int b = rgb & 0xff;
-                    gray[x][y] = (r + g + b) / 3;
+            // Get the RGB values from the image.
+            int[][][] arr = convertToArray(img);
+            
+            // Create an array to hold convolution results for each channel (r,g,b).
+            float[][][] conv = new float[width][height][3]; // channels: 0=r, 1=g, 2=b
+            
+            // For each pixel and each channel, compute the convolution.
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    for (int c = 1; c <= 3; c++) { // channels 1,2,3 correspond to r,g,b.
+                        float sum = 0;
+                        for (int m = 0; m < kRows; m++) {
+                            for (int n = 0; n < kCols; n++) {
+                                int ix = x + n - kCenterX;
+                                int iy = y + m - kCenterY;
+                                if (ix >= 0 && ix < width && iy >= 0 && iy < height) {
+                                    sum += kernel[m][n] * arr[ix][iy][c];
+                                }
+                            }
+                        }
+                        conv[x][y][c - 1] = sum;
+                    }
                 }
             }
             
-            // Convolve: create an array to hold convolution values.
-            float[][] conv = new float[width][height];
-            for (int y = 0; y < height; y++){
-                for (int x = 0; x < width; x++){
-                    float sum = 0;
-                    for (int m = 0; m < kRows; m++){
-                        for (int n = 0; n < kCols; n++){
-                            int ix = x + n - kCenterX;
-                            int iy = y + m - kCenterY;
-                            if (ix >= 0 && ix < width && iy >= 0 && iy < height) {
-                                sum += kernel[m][n] * gray[ix][iy];
+            // Optionally take the absolute value.
+            if (useAbsolute) {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        for (int c = 0; c < 3; c++) {
+                            conv[x][y][c] = Math.abs(conv[x][y][c]);
+                        }
+                    }
+                }
+            }
+            
+            // Optionally normalize each channel separately.
+            if (normalize) {
+                float[] minVal = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE};
+                float[] maxVal = {-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        for (int c = 0; c < 3; c++) {
+                            if (conv[x][y][c] < minVal[c]) {
+                                minVal[c] = conv[x][y][c];
+                            }
+                            if (conv[x][y][c] > maxVal[c]) {
+                                maxVal[c] = conv[x][y][c];
                             }
                         }
                     }
-                    conv[x][y] = sum;
                 }
-            }
-            
-            // Optionally convert to absolute values.
-            if (useAbsolute) {
-                for (int y = 0; y < height; y++){
-                    for (int x = 0; x < width; x++){
-                        conv[x][y] = Math.abs(conv[x][y]);
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        for (int c = 0; c < 3; c++) {
+                            float range = maxVal[c] - minVal[c];
+                            if (range == 0) {
+                                range = 1;
+                            }
+                            conv[x][y][c] = (conv[x][y][c] - minVal[c]) * 255 / range;
+                        }
                     }
                 }
             }
             
-            // Optionally normalize to [0,255].
-            if (normalize) {
-                float minVal = Float.MAX_VALUE, maxVal = -Float.MAX_VALUE;
-                for (int y = 0; y < height; y++){
-                    for (int x = 0; x < width; x++){
-                        if (conv[x][y] < minVal) minVal = conv[x][y];
-                        if (conv[x][y] > maxVal) maxVal = conv[x][y];
-                    }
-                }
-                float range = maxVal - minVal;
-                if (range == 0) range = 1;
-                for (int y = 0; y < height; y++){
-                    for (int x = 0; x < width; x++){
-                        conv[x][y] = (conv[x][y] - minVal) * 255 / range;
-                    }
-                }
-            }
-            
+            // Build the output image from the convolved channels.
             BufferedImage outImg = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-            for (int y = 0; y < height; y++){
-                for (int x = 0; x < width; x++){
-                    int val = clamp(Math.round(conv[x][y]));
-                    int rgb = (255 << 24) | (val << 16) | (val << 8) | val;
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int r = clamp(Math.round(conv[x][y][0]));
+                    int g = clamp(Math.round(conv[x][y][1]));
+                    int b = clamp(Math.round(conv[x][y][2]));
+                    int rgb = (255 << 24) | (r << 16) | (g << 8) | b;
                     outImg.setRGB(x, y, rgb);
                 }
             }
@@ -1288,6 +1299,7 @@ public class Demo extends JPanel implements ActionListener {
             "4-Neighbour Laplacian Enhancement", 
             "8-Neighbour Laplacian Enhancement", 
             "Roberts", 
+            "Roberts2",
             "Sobel X", 
             "Sobel Y", 
             "Gaussian 5x5", 
@@ -1322,55 +1334,65 @@ public class Demo extends JPanel implements ActionListener {
                     break;
                 case "4-Neighbour Laplacian":
                     kernel = new float[][] {
-                        {0, 1, 0},
-                        {1, -4, 1},
-                        {0, 1, 0}
+                        {0, -1, 0},
+                        {-1, 4, -1},
+                        {0, -1, 0}
                     };
-                    useAbs = true;
+                    // useAbs = true;
                     break;
                 case "8-Neighbour Laplacian":
                     kernel = new float[][] {
-                        {1, 1, 1},
-                        {1, -8, 1},
-                        {1, 1, 1}
+                        {-1, -1, -1},
+                        {-1, 8, -1},
+                        {-1, -1, -1}
                     };
                     useAbs = true;
                     break;
                 case "4-Neighbour Laplacian Enhancement":
                     kernel = new float[][] {
-                        {0, 1, 0},
-                        {1, 5, 1},
-                        {0, 1, 0}
+                        {0, -1, 0},
+                        {-1, 5, -1},
+                        {0, -1, 0}
                     };
                     break;
                 case "8-Neighbour Laplacian Enhancement":
                     kernel = new float[][] {
-                        {1, 1, 1},
-                        {1, 9, 1},
-                        {1, 1, 1}
+                        {-1, -1, -1},
+                        {-1, 9, -1},
+                        {-1, -1, -1}
                     };
                     break;
                 case "Roberts":
                     // Using a 2x2 Roberts cross operator.
                     kernel = new float[][] {
-                        {0, 1},
-                        {-1, 0}
+                        {0f, 0f, 0f},
+                        {0f, 0f, -1f},
+                        {0f, 1f, 0f}
+                    };
+                    useAbs = true;
+                    break;
+                    case "Roberts2":
+                    // Using a 2x2 Roberts cross operator.
+                    kernel = new float[][] {
+                        {0f, 0f, 0f},
+                        {0f, -1f, 0f},
+                        {0f, 0f, 1f}
                     };
                     useAbs = true;
                     break;
                 case "Sobel X":
                     kernel = new float[][] {
-                        {1, 0, -1},
-                        {2, 0, -2},
-                        {1, 0, -1}
+                        {-1, 0, 1},
+                        {-2, 0, 2},
+                        {-1, 0, 1}
                     };
                     useAbs = true;
                     break;
                 case "Sobel Y":
                     kernel = new float[][] {
-                        {1, 2, 1},
+                        {-1, -2, -1},
                         {0, 0, 0},
-                        {-1, -2, -1}
+                        {1, 2, 1}
                     };
                     useAbs = true;
                     break;
@@ -1385,11 +1407,11 @@ public class Demo extends JPanel implements ActionListener {
                     break;
                 case "Laplacian of Gaussian 5x5":
                     kernel = new float[][] {
-                        {0, 0, 1, 0, 0},
-                        {0, 1, 2, 1, 0},
-                        {1, 2, -16, 2, 1},
-                        {0, 1, 2, 1, 0},
-                        {0, 0, 1, 0, 0}
+                        {0, 0, -1, 0, 0},
+                        {0, -1, -2, -1, 0},
+                        {-1, -2, 16, -2, -1},
+                        {0, -1, -2, -1, 0},
+                        {0, 0, -1, 0, 0}
                     };
                     useAbs = true;
                     break;
