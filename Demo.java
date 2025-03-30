@@ -1351,18 +1351,18 @@ public class Demo extends JPanel implements ActionListener {
                 case "Roberts":
                     // Using a 2x2 Roberts cross operator.
                     kernel = new float[][] {
-                        {0f, 0f, 0f},
-                        {0f, 0f, -1f},
-                        {0f, 1f, 0f}
+                        {0, 0, 0},
+                        {0, 0, -1},
+                        {0, 1, 0}
                     };
                     useAbs = true;
                     break;
                     case "Roberts2":
                     // Using a 2x2 Roberts cross operator.
                     kernel = new float[][] {
-                        {0f, 0f, 0f},
-                        {0f, -1f, 0f},
-                        {0f, 0f, 1f}
+                        {0, 0, 0},
+                        {0, -1, 0},
+                        {0, 0, 1}
                     };
                     useAbs = true;
                     break;
