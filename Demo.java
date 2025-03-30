@@ -163,9 +163,9 @@ public class Demo extends JPanel implements ActionListener {
         return img;
     }
     
-    // ------------------- Example Processing Functions -------------------
-    // (For brevity, only a few functions are shown. You would wrap the rest similarly.)
+   // ==================== LAB 1 & LAB 2 Operations ====================
     
+    // Negative (linear transform): s = 255 - r.
     private BufferedImage applyNegative(BufferedImage img) {
         int width = img.getWidth(), height = img.getHeight();
         int[][][] arr = convertToArray(img);
@@ -876,8 +876,10 @@ public class Demo extends JPanel implements ActionListener {
         if (roi == null) {
             return func.apply(img);
         } else {
+            // Extract ROI subimage (note: roi is relative to the processed image).
             BufferedImage sub = img.getSubimage(roi.x, roi.y, roi.width, roi.height);
             BufferedImage processedSub = func.apply(sub);
+            // Create a copy of the full image.
             BufferedImage result = copyImage(img);
             Graphics g = result.getGraphics();
             g.drawImage(processedSub, roi.x, roi.y, null);
@@ -905,6 +907,7 @@ public class Demo extends JPanel implements ActionListener {
             undoStack.push(copyImage(processedImage));
     }
     
+    // Undo the last operation.
     private void undo() {
         if (!undoStack.isEmpty()) {
             processedImage = undoStack.pop();
@@ -915,15 +918,16 @@ public class Demo extends JPanel implements ActionListener {
         }
     }
     
+    // Reset processed image to the original and clear the undo stack.
     private void resetToOriginal() {
         processedImage = copyImage(originalImage);
         undoStack.clear();
-        roi = null;
-        log("Reset to original.");
+        roi = null;  // also clear ROI
         repaint();
     }
     
-    // ------------------- Painting -------------------
+    // ==================== Painting ====================
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -966,7 +970,9 @@ public class Demo extends JPanel implements ActionListener {
                 try {
                     BufferedImage img = ImageIO.read(file);
                     if (img.getType() != BufferedImage.TYPE_INT_RGB) {
-                        BufferedImage temp = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
+                        BufferedImage temp = new BufferedImage(
+                            img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB
+                        );
                         Graphics g = temp.getGraphics();
                         g.drawImage(img, 0, 0, null);
                         g.dispose();
@@ -974,6 +980,7 @@ public class Demo extends JPanel implements ActionListener {
                     }
                     originalImage = img;
                     resetToOriginal();
+                    revalidate();
                     repaint();
                     log("Loaded original image.");
                 } catch (IOException ex) {
@@ -999,9 +1006,11 @@ public class Demo extends JPanel implements ActionListener {
             selectingROI = true;
             roi = null;  // Clear any previous ROI.
             JOptionPane.showMessageDialog(this, "Click and drag on the processed image to select ROI.");
+            log("ROI selection mode entered.");
         } else if (cmd.equals("Clear ROI")) {
             roi = null;
             repaint();
+            log("ROI cleared.");
         }
         else if (cmd.equals("Original")) {
             backupForUndo();
@@ -1024,7 +1033,8 @@ public class Demo extends JPanel implements ActionListener {
                         processedImage = (roi != null)
                         ? applyOnROI(processedImage, (img) -> applyRescale(img, factor))
                         : applyRescale(processedImage, factor);
-                                            repaint();
+                        repaint();
+                        log("Applied rescale operation with factor " + factor);
                     }
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid input for scaling factor.");
@@ -1056,9 +1066,6 @@ public class Demo extends JPanel implements ActionListener {
                     cmd.equals("Arithmetic Subtract") ||
                     cmd.equals("Arithmetic Multiply") ||
                     cmd.equals("Arithmetic Divide")) {
-            // JFileChooser chooser = new JFileChooser();
-            // if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                // File file = chooser.getSelectedFile();
                 if (secondImage == null) {
                     JOptionPane.showMessageDialog(this, "Please load a second image first.");
                 } else {
@@ -1071,7 +1078,6 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = applyArithmeticOperation(processedImage, secondImage, op);
                     repaint();
                 }
-            // }
         } else if (cmd.equals("Bitwise NOT")) {
             backupForUndo();
             processedImage = (roi != null)
@@ -1307,6 +1313,7 @@ public class Demo extends JPanel implements ActionListener {
                 processedImage = applyConvolution(processedImage, kernel, useAbs, true);
                 repaint();
             }
+            }
         }
         // ----- Lab7 Operations -----
         else if (cmd.equals("Salt-and-Pepper Noise")) {
@@ -1429,7 +1436,8 @@ public class Demo extends JPanel implements ActionListener {
             processedImage = (roi != null)
             ? applyOnROI(processedImage, (img) -> histogramEqualisation(img))
             : histogramEqualisation(processedImage);
-                    repaint();
+            repaint();
+            log("Applied histogram equalisation.");
         } else if (cmd.equals("Display Histogram")) {
             BufferedImage histImg = displayHistogram(processedImage);
             JFrame histFrame = new JFrame("Histogram");
@@ -1442,8 +1450,8 @@ public class Demo extends JPanel implements ActionListener {
             // If ROI is selected, apply function only to ROI.
             processedImage = (roi != null) ? applyOnROI(processedImage, (img) -> applyNegative(img)) : applyNegative(processedImage);
             repaint();
-        }
-    }else if (cmd.equals("Load Second Image")) {
+            log("Applied negative operation.");
+        }else if (cmd.equals("Load Second Image")) {
             JFileChooser chooser = new JFileChooser();
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
@@ -1463,63 +1471,7 @@ public class Demo extends JPanel implements ActionListener {
                 }
             }
         }
-        // For arithmetic operations (using originalImage and secondImage)
-        else if (cmd.equals("Arithmetic Add")) {
-            if (secondImage == null) {
-                JOptionPane.showMessageDialog(this, "Please load a second image first.");
-            } else {
-                backupForUndo();
-                processedImage = applyArithmeticOperation(originalImage, secondImage, "add");
-                repaint();
-                log("Performed arithmetic addition on original and second images.");
-            }
-        }
-        // You can add similar items for subtract, multiply, divide and bitwise operations.
-        // For operations on processedImage with ROI, use processWithROI() as shown:
-        else if (cmd.equals("Negative")) {
-            backupForUndo();
-            processedImage = processWithROI(img -> applyNegative(img));
-            repaint();
-            log("Applied negative operation.");
-        }
-        else if (cmd.equals("Rescale")) {
-            String input = JOptionPane.showInputDialog(this, "Enter scaling factor (0 to 2):", "1.0");
-            if (input != null) {
-                try {
-                    float factor = Float.parseFloat(input);
-                    backupForUndo();
-                    processedImage = processWithROI(img -> applyRescale(img, factor));
-                    repaint();
-                    log("Applied rescale operation with factor " + factor);
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Invalid scaling factor.");
-                }
-            }
-        }
-        // ... (Include similar blocks for other operations, wrapping with processWithROI)
-        else if (cmd.equals("Reset")) {
-            resetToOriginal();
-        }
-        // Logging example for Histogram Equalisation:
-        else if (cmd.equals("Histogram Equalisation")) {
-            backupForUndo();
-            processedImage = processWithROI(img -> histogramEqualisation(img));
-            repaint();
-            log("Applied histogram equalisation.");
-        }
-        // ROI selection commands:
-        else if (cmd.equals("Select ROI")) {
-            selectingROI = true;
-            roi = null;
-            JOptionPane.showMessageDialog(this, "Click and drag on the processed image to select ROI.");
-            log("ROI selection mode entered.");
-        } else if (cmd.equals("Clear ROI")) {
-            roi = null;
-            repaint();
-            log("ROI cleared.");
-        }
     }
-    
     // ------------------- Main Method -------------------
     public static void main(String[] args) {
         // Create a log area.
@@ -1578,15 +1530,15 @@ public class Demo extends JPanel implements ActionListener {
         menuBar.add(editMenu);
 
         // Lab1 & Lab2 Operations.
-        JMenu opMenu = new JMenu("Operations");
+        JMenu lab1and2Menu = new JMenu("Lab 1&2 Operations");
         String[] ops = {"Original", "Negative", "Rescale", "Shift", "Shift+Rescale"};
         for (String op : ops) {
             JMenuItem item = new JMenuItem(op);
             item.setActionCommand(op);
             item.addActionListener(demo);
-            opMenu.add(item);
+            lab1and2Menu.add(item);
         }
-        menuBar.add(opMenu);
+        menuBar.add(lab1and2Menu);
         
         // Lab3 Operations.
         JMenu lab3Menu = new JMenu("Lab3 Operations");
@@ -1651,17 +1603,6 @@ public class Demo extends JPanel implements ActionListener {
             lab8Menu.add(item);
         }
         menuBar.add(lab8Menu);
-        // Operations menu (you can add additional menus for Lab3...Lab8 as needed).
-        // JMenu opMenu = new JMenu("Operations");
-        JMenuItem negativeItem = new JMenuItem("Negative");
-        negativeItem.setActionCommand("Negative");
-        negativeItem.addActionListener(demo);
-        opMenu.add(negativeItem);
-        JMenuItem rescaleItem = new JMenuItem("Rescale");
-        rescaleItem.setActionCommand("Rescale");
-        rescaleItem.addActionListener(demo);
-        opMenu.add(rescaleItem);
-        menuBar.add(opMenu);
         
         // Build the main frame.
         // JFrame frame = new JFrame("Image Processing Demo (3-Image + Log)");
