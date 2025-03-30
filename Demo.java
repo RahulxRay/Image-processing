@@ -1219,7 +1219,7 @@ public class Demo extends JPanel implements ActionListener {
             processedImage = (roi != null)
             ? applyOnROI(processedImage, (img) -> applyPointNegative(img))
             : applyPointNegative(processedImage);
-                    repaint();
+            repaint();
         } else if (cmd.equals("Logarithmic Transform")) {
             String input = JOptionPane.showInputDialog(this, "Enter constant c (or leave blank for automatic):", "");
             Float cVal = null;
