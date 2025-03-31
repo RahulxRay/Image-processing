@@ -361,22 +361,22 @@ public class Demo extends JPanel implements ActionListener {
             int[][][] arr1 = convertToArray(img1);
             int[][][] arr2 = convertToArray(img2);
             int[][][] res = new int[width][height][4];
-            int[] minChannel = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE};
-            int[] maxChannel = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+           int minChannel = Integer.MAX_VALUE;
+            int maxChannel = Integer.MIN_VALUE;
             for (int y = 0; y < height; y++){
                 for (int x = 0; x < width; x++){
                     res[x][y][0] = arr1[x][y][0]; // alpha from first image
                     for (int c = 1; c <= 3; c++){
-                        int v = 0;
+                        //int v = 0;
                         switch(op) {
-                            case "add": v = arr1[x][y][c] + arr2[x][y][c]; break;
-                            case "subtract": v = arr1[x][y][c] - arr2[x][y][c]; break;
-                            case "multiply": v = arr1[x][y][c] * arr2[x][y][c]; break;
-                            case "divide": v = (arr2[x][y][c] == 0) ? 0 : arr1[x][y][c] / arr2[x][y][c]; break;
+                            case "add": res[x][y][c] = arr1[x][y][c] + arr2[x][y][c]; break;
+                            case "subtract": res[x][y][c] = arr1[x][y][c] - arr2[x][y][c]; break;
+                            case "multiply": res[x][y][c] = arr1[x][y][c] * arr2[x][y][c]; break;
+                            case "divide": res[x][y][c] = (arr2[x][y][c] == 0) ? 0 : arr1[x][y][c] / arr2[x][y][c]; break;
                         }
-                        res[x][y][c] = v;
-                        minChannel[c-1] = Math.min(minChannel[c-1], v);
-                        maxChannel[c-1] = Math.max(maxChannel[c-1], v);
+                        
+                        minChannel = Math.min(minChannel, res[x][y][c]);
+                        maxChannel = Math.max(maxChannel, res[x][y][c]);
                     }
                 }
             }
@@ -384,12 +384,8 @@ public class Demo extends JPanel implements ActionListener {
             for (int y = 0; y < height; y++){
                 for (int x = 0; x < width; x++){
                     for (int c = 1; c <= 3; c++){
-                        if (maxChannel[c-1] != minChannel[c-1]) {
-                            int newVal = (res[x][y][c] - minChannel[c-1]) * 255 / (maxChannel[c-1] - minChannel[c-1]);
-                            res[x][y][c] = clamp(newVal);
-                        } else {
-                            res[x][y][c] = clamp(res[x][y][c]);
-                        }
+                            res[x][y][c] = (res[x][y][c] - minChannel) * 255 / (maxChannel - minChannel);
+                            
                     }
                 }
             }
