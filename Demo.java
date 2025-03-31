@@ -277,28 +277,35 @@ public class Demo extends JPanel implements ActionListener {
             return convertToBimage(arr);
         }
     
-        // Shift+Rescale: add a random value (between -50 and 50) and then linearly rescale.
+        // Shift+Rescale: Add one random value (between -50 and 50) per pixel (applied to all channels)
+        // then rescale each channel independently to the range [0,255].
         private BufferedImage applyShiftAndRescale(BufferedImage img) {
             int width = img.getWidth(), height = img.getHeight();
             int[][][] arr = convertToArray(img);
             Random rand = new Random();
+            
+            // Arrays to track min and max per channel.
             int[] minChannel = {255, 255, 255};
             int[] maxChannel = {0, 0, 0};
+            
+            // For each pixel, generate a single random shift value and add it to each channel.
             for (int y = 0; y < height; y++){
                 for (int x = 0; x < width; x++){
+                    int randomVal = rand.nextInt(101) - 50; // one random value between -50 and 50 per pixel
                     for (int c = 1; c <= 3; c++){
-                        int randomVal = rand.nextInt(101) - 50;
                         arr[x][y][c] += randomVal;
-                        minChannel[c-1] = Math.min(minChannel[c-1], arr[x][y][c]);
-                        maxChannel[c-1] = Math.max(maxChannel[c-1], arr[x][y][c]);
+                        minChannel[c - 1] = Math.min(minChannel[c - 1], arr[x][y][c]);
+                        maxChannel[c - 1] = Math.max(maxChannel[c - 1], arr[x][y][c]);
                     }
                 }
             }
+            
+            // Rescale each channel independently.
             for (int y = 0; y < height; y++){
                 for (int x = 0; x < width; x++){
                     for (int c = 1; c <= 3; c++){
-                        if (maxChannel[c-1] != minChannel[c-1]) {
-                            int newVal = (arr[x][y][c] - minChannel[c-1]) * 255 / (maxChannel[c-1] - minChannel[c-1]);
+                        if (maxChannel[c - 1] != minChannel[c - 1]) {
+                            int newVal = (arr[x][y][c] - minChannel[c - 1]) * 255 / (maxChannel[c - 1] - minChannel[c - 1]);
                             arr[x][y][c] = clamp(newVal);
                         } else {
                             arr[x][y][c] = clamp(arr[x][y][c]);
