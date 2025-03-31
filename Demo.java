@@ -930,7 +930,25 @@ public class Demo extends JPanel implements ActionListener {
             return result;
         }
     }
-    
+    // A helper that applies a two–image operation only on the ROI region of the first image.
+    private BufferedImage applyOnROI2(BufferedImage img1, BufferedImage img2, java.util.function.BiFunction<BufferedImage, BufferedImage, BufferedImage> func) {
+        if (roi == null) {
+            return func.apply(img1, img2);
+        } else {
+            // Extract ROI from both images (assuming both are the same size)
+            BufferedImage roi1 = img1.getSubimage(roi.x, roi.y, roi.width, roi.height);
+            BufferedImage roi2 = img2.getSubimage(roi.x, roi.y, roi.width, roi.height);
+            BufferedImage roiResult = func.apply(roi1, roi2);
+            // Paste the ROI result back into a copy of img1.
+            BufferedImage result = copyImage(img1);
+            Graphics g = result.getGraphics();
+            g.drawImage(roiResult, roi.x, roi.y, null);
+            g.dispose();
+            return result;
+        }
+    }
+
+
     // ------------------- Logging -------------------
     private void log(String message) {
         if (logArea != null) {
@@ -1123,8 +1141,10 @@ public class Demo extends JPanel implements ActionListener {
                     else if (cmd.equals("Arithmetic Subtract")) op = "subtract";
                     else if (cmd.equals("Arithmetic Multiply")) op = "multiply";
                     else if (cmd.equals("Arithmetic Divide")) op = "divide";
-                    processedImage = applyArithmeticOperation(processedImage, secondImage, op);
-                    repaint();
+                    final String opFinal = op;
+                    processedImage = applyOnROI2(processedImage, secondImage,
+                    (imgA, imgB) -> applyArithmeticOperation(imgA, imgB, opFinal));
+          repaint();
                 }
         } else if (cmd.equals("Bitwise NOT")) {
             backupForUndo();
@@ -1143,8 +1163,10 @@ public class Demo extends JPanel implements ActionListener {
                     if (cmd.equals("Bitwise AND")) op = "and";
                     else if (cmd.equals("Bitwise OR")) op = "or";
                     else if (cmd.equals("Bitwise XOR")) op = "xor";
-                    processedImage = applyBitwiseOperation(processedImage, secondImage, op);
-                    repaint();
+                    final String opFinal = op;
+                    processedImage = applyOnROI2(processedImage, secondImage,
+                    (imgA, imgB) -> applyBitwiseOperation(imgA, imgB, opFinal));
+          repaint();
                 }
         }        // ----- Lab4 Operations -----
         else if (cmd.equals("Point Negative")) {
@@ -1164,8 +1186,11 @@ public class Demo extends JPanel implements ActionListener {
                 }
             }
             backupForUndo();
-            processedImage = applyLogTransform(processedImage, cVal);
-            repaint();
+            final Float cValFinal = cVal;
+            processedImage = (roi != null) 
+            ? applyOnROI(processedImage, (img) -> applyLogTransform(img, cValFinal))
+            : applyLogTransform(processedImage, cVal);
+                    repaint();
         } else if (cmd.equals("Power-Law Transform")) {
             String input = JOptionPane.showInputDialog(this, "Enter power (p, from 0.01 to 25):", "1.0");
             if (input != null) {
@@ -1338,8 +1363,12 @@ public class Demo extends JPanel implements ActionListener {
             if (kernel != null) {
                 backupForUndo();
                 // Always normalize the convolution result.
-                processedImage = applyConvolution(processedImage, kernel, useAbs, true);
-                repaint();
+                final float[][] kernelFinal = kernel;
+                final boolean useAbsFinal = useAbs;
+                processedImage = (roi != null)
+                ? applyOnROI(processedImage, (img) -> applyConvolution(img, kernelFinal, useAbsFinal, true))
+                : applyConvolution(processedImage, kernel, useAbs, true);
+                            repaint();
             }
             }
         }
