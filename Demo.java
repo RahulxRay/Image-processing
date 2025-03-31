@@ -911,68 +911,7 @@ public class Demo extends JPanel implements ActionListener {
             }
             return T;
         }
-        
-        private BufferedImage adaptiveThreshold(BufferedImage img, int blockSize, int varianceThreshold) {
-            int width = img.getWidth(), height = img.getHeight();
-            BufferedImage out = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-            for (int y = 0; y < height; y += blockSize) {
-                for (int x = 0; x < width; x += blockSize) {
-                    int w = Math.min(blockSize, width - x);
-                    int h = Math.min(blockSize, height - y);
-                    int[] hist = new int[256];
-                    int total = w * h;
-                    int sum = 0;
-                    for (int j = 0; j < h; j++){
-                        for (int i = 0; i < w; i++){
-                            int rgb = img.getRGB(x+i, y+j);
-                            int r = (rgb >> 16) & 0xff;
-                            int g = (rgb >> 8) & 0xff;
-                            int b = rgb & 0xff;
-                            int gray = (r+g+b)/3;
-                            hist[gray]++;
-                            sum += gray;
-                        }
-                    }
-                    double mean = sum / (double) total;
-                    double var = 0;
-                    for (int i = 0; i < 256; i++){
-                        var += hist[i] * Math.pow(i - mean, 2);
-                    }
-                    var /= total;
-                    double std = Math.sqrt(var);
-                    int T = (int)mean;
-                    if (std > varianceThreshold) {
-                        int sum1 = 0, sum2 = 0, count1 = 0, count2 = 0;
-                        for (int j = 0; j < h; j++){
-                            for (int i = 0; i < w; i++){
-                                int rgb = img.getRGB(x+i, y+j);
-                                int r = (rgb >> 16) & 0xff;
-                                int g = (rgb >> 8) & 0xff;
-                                int b = rgb & 0xff;
-                                int grayVal = (r+g+b)/3;
-                                if(grayVal < T) { sum1 += grayVal; count1++; }
-                                else { sum2 += grayVal; count2++; }
-                            }
-                        }
-                        if(count1 > 0 && count2 > 0)
-                            T = (int)Math.round((sum1/count1 + sum2/count2)/2.0);
-                    }
-                    for (int j = 0; j < h; j++){
-                        for (int i = 0; i < w; i++){
-                            int rgb = img.getRGB(x+i, y+j);
-                            int r = (rgb >> 16) & 0xff;
-                            int g = (rgb >> 8) & 0xff;
-                            int b = rgb & 0xff;
-                            int grayVal = (r+g+b)/3;
-                            int val = (grayVal >= T) ? 255 : 0;
-                            int newRgb = (255 << 24) | (val << 16) | (val << 8) | val;
-                            out.setRGB(x+i, y+j, newRgb);
-                        }
-                    }
-                }
-            }
-            return out;
-        }
+
     
     // ------------------- ROI Wrapper -------------------
     // Applies a function to the ROI subimage if ROI is defined; otherwise, applies to full image.
@@ -1502,22 +1441,6 @@ public class Demo extends JPanel implements ActionListener {
             ? applyOnROI(processedImage, (img) -> simpleThreshold(img, T))
             : simpleThreshold(processedImage, T);
             repaint();
-        } else if (cmd.equals("Adaptive Threshold")) {
-            String input1 = JOptionPane.showInputDialog(this, "Enter block size (odd integer):", "16");
-            String input2 = JOptionPane.showInputDialog(this, "Enter variance threshold:", "100");
-            if (input1 != null && input2 != null) {
-                try {
-                    int blockSize = Integer.parseInt(input1);
-                    int varThresh = Integer.parseInt(input2);
-                    backupForUndo();
-                    processedImage = (roi != null)
-                    ? applyOnROI(processedImage, (img) -> adaptiveThreshold(img, blockSize, varThresh))
-                    : adaptiveThreshold(processedImage, blockSize, varThresh);
-                                    repaint();
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Invalid input for adaptive threshold.");
-                }
-            }
         }
         // Lab5 Operations: Histogram & Histogram Equalisation
         else if (cmd.equals("Histogram Equalisation")) {
@@ -1690,7 +1613,7 @@ public class Demo extends JPanel implements ActionListener {
         
         // Lab8 Operations.
         JMenu lab8Menu = new JMenu("Lab8 Operations");
-        String[] lab8Ops = {"Mean & Std", "Simple Threshold", "Automated Threshold", "Adaptive Threshold"};
+        String[] lab8Ops = {"Mean & Std", "Simple Threshold", "Automated Threshold"};
         for (String op : lab8Ops) {
             JMenuItem item = new JMenuItem(op);
             item.setActionCommand(op);
