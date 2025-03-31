@@ -1446,7 +1446,10 @@ public class Demo extends JPanel implements ActionListener {
         }
         // Lab8 Operations: Thresholding
         else if (cmd.equals("Mean & Std")) {
-            double[] ms = computeMeanStd(processedImage);
+            BufferedImage target = (roi != null) 
+            ? processedImage.getSubimage(roi.x, roi.y, roi.width, roi.height)
+            : processedImage;
+            double[] ms = computeMeanStd(target);
             JOptionPane.showMessageDialog(this, "Mean: " + ms[0] + "\nStd Dev: " + ms[1]);
         } else if (cmd.equals("Simple Threshold")) {
             String input = JOptionPane.showInputDialog(this, "Enter threshold (0-255):", "128");
@@ -1480,7 +1483,10 @@ public class Demo extends JPanel implements ActionListener {
             repaint();
             log("Applied histogram equalisation.");
         } else if (cmd.equals("Display Histogram")) {
-            BufferedImage histImg = displayHistogram(processedImage);
+            BufferedImage target = (roi != null) 
+            ? processedImage.getSubimage(roi.x, roi.y, roi.width, roi.height)
+            : processedImage;
+            BufferedImage histImg = displayHistogram(target);
             JFrame histFrame = new JFrame("Histogram");
             histFrame.getContentPane().add(new JLabel(new ImageIcon(histImg)));
             histFrame.pack();
