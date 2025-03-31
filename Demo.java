@@ -69,39 +69,39 @@ public class Demo extends JPanel implements ActionListener {
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                // ROI selection only applies in the processedImage area (right panel)
-                int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
-                if (selectingROI && e.getX() >= offsetX) {
-                    roiStart = new Point(e.getX() - offsetX, e.getY());
-                    roi = new Rectangle(roiStart);
-                }
+            // ROI selection only applies in the processedImage area (right panel)
+            int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
+            if (selectingROI && e.getX() >= offsetX) {
+                roiStart = new Point(e.getX() - offsetX, e.getY());
+                roi = new Rectangle(roiStart);
+            }
             }
             @Override
             public void mouseReleased(MouseEvent e) {
-                if (selectingROI && roiStart != null) {
-                    int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
-                    Point currentPoint = new Point(e.getX() - offsetX, e.getY());
-                    updateROI(currentPoint);
-                    selectingROI = false;
-                    repaint();
-                    log("ROI selected: " + roi);
-                }
+            if (selectingROI && roiStart != null) {
+                int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
+                Point currentPoint = new Point(e.getX() - offsetX, e.getY());
+                updateROI(currentPoint);
+                selectingROI = false;
+                repaint();
+                log("ROI selected: " + roi);
+            }
             }
         });
         
         addMouseMotionListener(new MouseMotionAdapter() {
             @Override
             public void mouseDragged(MouseEvent e) {
-                if (selectingROI && roiStart != null) {
-                    int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
-                    Point currentPoint = new Point(e.getX() - offsetX, e.getY());
-                    updateROI(currentPoint);
-                    repaint();
-                }
+            if (selectingROI && roiStart != null) {
+                int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
+                Point currentPoint = new Point(e.getX() - offsetX, e.getY());
+                updateROI(currentPoint);
+                repaint();
+                log("ROI updated: " + roi);
+            }
             }
         });
-    }
-    
+        }
     // Update ROI based on current mouse point (relative to processed image)
     private void updateROI(Point currentPoint) {
         int newX = Math.min(roiStart.x, currentPoint.x);
@@ -972,6 +972,8 @@ public class Demo extends JPanel implements ActionListener {
         undoStack.clear();
         roi = null;  // also clear ROI
         repaint();
+        log("Reset to original image.");
+        logArea.setText("");  // clear log area
     }
     
     // ==================== Painting ====================
@@ -979,31 +981,48 @@ public class Demo extends JPanel implements ActionListener {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
+        int labelHeight = 20; // vertical space reserved for labels
         int x = 0;
-        // Draw left image (originalImage)
+        
+        // Draw left image (originalImage) with label "Original"
         if (originalImage != null) {
-            g.drawImage(originalImage, x, 0, this);
+            // Draw label above the image
+            g.setColor(Color.BLACK);
+            g.drawString("Original Image", x + 10, 15);
+            // Draw image below the label
+            g.drawImage(originalImage, x, labelHeight, this);
             x += originalImage.getWidth() + gap;
         }
-        // Draw middle image (secondImage); if null, draw a placeholder border.
+        
+        // Draw middle image (secondImage) with label "Second"
         if (secondImage != null) {
-            g.drawImage(secondImage, x, 0, this);
+            g.setColor(Color.BLACK);
+            g.drawString("Second Image", x + 10, 15);
+            g.drawImage(secondImage, x, labelHeight, this);
         } else {
+            // Draw placeholder border and label if second image not loaded
             g.setColor(Color.GRAY);
-            g.drawRect(x, 0, originalImage.getWidth(), originalImage.getHeight());
-            g.drawString("Load second image", x + 10, 20);
+            g.drawRect(x, labelHeight, originalImage.getWidth(), originalImage.getHeight());
+            g.drawString("Load second image", x + 10, labelHeight + 20);
+            g.setColor(Color.BLACK);
+            g.drawString("Second", x + 10, 15);
         }
         x += getMiddleImageWidth() + gap;
-        // Draw right image (processedImage)
+        
+        // Draw right image (processedImage) with label "Processed"
         if (processedImage != null) {
-            g.drawImage(processedImage, x, 0, this);
+            g.setColor(Color.BLACK);
+            g.drawString("Processed Image", x + 10, 15);
+            g.drawImage(processedImage, x, labelHeight, this);
         }
-        // Draw ROI rectangle (relative to processedImage area)
+        
+        // Draw ROI rectangle (relative to processed image area)
         if (roi != null) {
             Graphics2D g2d = (Graphics2D) g;
             g2d.setColor(Color.RED);
+            // Calculate offset based on the positions of the first two images and the gap
             int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
-            g2d.drawRect(offsetX + roi.x, roi.y, roi.width, roi.height);
+            g2d.drawRect(offsetX + roi.x, roi.y + labelHeight, roi.width, roi.height);
         }
     }
     
