@@ -230,6 +230,42 @@ public class Demo extends JPanel implements ActionListener {
         return img;
     }
 
+    // Returns an array of supported image formats.
+    private String[] getFormats() {
+        String[] formats = {"bmp", "gif", "jpeg", "jpg", "png"};
+        java.util.TreeSet<String> formatSet = new java.util.TreeSet<>();
+        for (String s : formats) {
+            formatSet.add(s.toLowerCase());
+        }
+        return formatSet.toArray(new String[0]);
+    }
+
+    // New "Save As" method.
+    private void saveAs() {
+        // Let the user choose the format (default "png")
+        String format = (String) JOptionPane.showInputDialog(
+                this,
+                "Choose file format:",
+                "Save As",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                getFormats(),
+                "png");
+        if (format != null) {
+            JFileChooser chooser = new JFileChooser();
+            // Suggest a default file name using the chosen format.
+            chooser.setSelectedFile(new File("savedimage." + format));
+            int rval = chooser.showSaveDialog(this);
+            if (rval == JFileChooser.APPROVE_OPTION) {
+                File file = chooser.getSelectedFile();
+                try {
+                    ImageIO.write(processedImage, format, file);
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(this, "Error saving file: " + ex.getMessage());
+                }
+            }
+        }
+    }
 
 
     
@@ -1069,15 +1105,7 @@ public class Demo extends JPanel implements ActionListener {
                 }
             }
         } else if (cmd.equals("Save")) {
-            JFileChooser chooser = new JFileChooser();
-            if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                try {
-                    ImageIO.write(processedImage, "png", file);
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
+            saveAs();
         } else if (cmd.equals("Undo")) {
             undo();
         }
@@ -1576,34 +1604,24 @@ public class Demo extends JPanel implements ActionListener {
         
         // File menu.
         JMenu fileMenu = new JMenu("File");
-        JMenuItem openOriginalItem = new JMenuItem("Open Original");
-        openOriginalItem.setActionCommand("Open Original");
-        openOriginalItem.addActionListener(demo);
-        fileMenu.add(openOriginalItem);
-        JMenuItem loadSecondItem = new JMenuItem("Load Second Image");
-        loadSecondItem.setActionCommand("Load Second Image");
-        loadSecondItem.addActionListener(demo);
-        fileMenu.add(loadSecondItem);
-        JMenuItem saveItem = new JMenuItem("Save Processed");
-        saveItem.setActionCommand("Save");
-        saveItem.addActionListener(demo);
-        fileMenu.add(saveItem);
+        String[] fileOps = {"Open Original", "Load Second Image", "Save"};
+        for (String op : fileOps) {
+            JMenuItem item = new JMenuItem(op);
+            item.setActionCommand(op);
+            item.addActionListener(demo);
+            fileMenu.add(item);
+        }
         menuBar.add(fileMenu);
-        
+
         // Edit menu.
         JMenu editMenu = new JMenu("Edit");
-        JMenuItem undoItem = new JMenuItem("Undo");
-        undoItem.setActionCommand("Undo");
-        undoItem.addActionListener(demo);
-        editMenu.add(undoItem);
-        JMenuItem selectROIItem = new JMenuItem("Select ROI");
-        selectROIItem.setActionCommand("Select ROI");
-        selectROIItem.addActionListener(demo);
-        editMenu.add(selectROIItem);
-        JMenuItem clearROIItem = new JMenuItem("Clear ROI");
-        clearROIItem.setActionCommand("Clear ROI");
-        clearROIItem.addActionListener(demo);
-        editMenu.add(clearROIItem);
+        String[] editOps = {"Undo", "Select ROI", "Clear ROI"};
+        for (String op : editOps) {
+            JMenuItem item = new JMenuItem(op);
+            item.setActionCommand(op);
+            item.addActionListener(demo);
+            editMenu.add(item);
+        }
         menuBar.add(editMenu);
 
         // Lab1 & Lab2 Operations.
@@ -1620,7 +1638,7 @@ public class Demo extends JPanel implements ActionListener {
         // Lab3 Operations.
         JMenu lab3Menu = new JMenu("Lab3 Operations");
         String[] lab3Ops = {"Arithmetic Add", "Arithmetic Subtract", "Arithmetic Multiply", "Arithmetic Divide",
-                            "Bitwise NOT", "Bitwise AND", "Bitwise OR", "Bitwise XOR", "ROI Negative"};
+                            "Bitwise NOT", "Bitwise AND", "Bitwise OR", "Bitwise XOR"};
         for (String op : lab3Ops) {
             JMenuItem item = new JMenuItem(op);
             item.setActionCommand(op);
