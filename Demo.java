@@ -24,7 +24,7 @@ public class Demo extends JPanel implements ActionListener {
     private Point roiStart = null;
     private Rectangle roi = null; // ROI relative to the processedImage
     
-    // Log area (set by the main frame)
+    // Log area for displaying messages.
     private JTextArea logArea;
     
     // Constructor: load the original image from file.
@@ -69,7 +69,7 @@ public class Demo extends JPanel implements ActionListener {
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-            // ROI selection only applies in the processedImage area (right panel)
+            // ROI selection only applies in the processedImage area (right one)
             int offsetX = getLeftImageWidth() + getMiddleImageWidth() + 2 * gap;
             if (selectingROI && e.getX() >= offsetX) {
                 roiStart = new Point(e.getX() - offsetX, e.getY());
@@ -102,7 +102,6 @@ public class Demo extends JPanel implements ActionListener {
             }
         });
         }
-    // Update ROI based on current mouse point (relative to processed image)
     private void updateROI(Point currentPoint) {
         int newX = Math.min(roiStart.x, currentPoint.x);
         int newY = Math.min(roiStart.y, currentPoint.y);
@@ -111,7 +110,7 @@ public class Demo extends JPanel implements ActionListener {
         roi = new Rectangle(newX, newY, newW, newH);
     }
     
-    // Helper: make a deep copy of a BufferedImage.
+    // Helper: make a copy of a BufferedImage.
     private BufferedImage copyImage(BufferedImage img) {
         BufferedImage copy = new BufferedImage(img.getWidth(), img.getHeight(), img.getType());
         Graphics g = copy.getGraphics();
@@ -444,6 +443,7 @@ public class Demo extends JPanel implements ActionListener {
             int[][][] arr = convertToArray(img);
             // Automatic computation:
             float c = (userC != null) ? userC : (255f / (float)Math.log(256));
+            log("Logarithmic transform: c = " + c);
             for (int y = 0; y < height; y++){
                 for (int x = 0; x < width; x++){
                     for (int channel = 1; channel <= 3; channel++){
@@ -1098,6 +1098,7 @@ public class Demo extends JPanel implements ActionListener {
             ? applyOnROI(processedImage, (img) -> applyNegative(img))
             : applyNegative(processedImage);
             repaint();
+            log("Applied negative operation.");
         } else if (cmd.equals("Rescale")) {
             String input = JOptionPane.showInputDialog(this, "Enter scaling factor (0 to 2):", "1.0");
             if (input != null) {
@@ -1126,7 +1127,8 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = (roi != null)
                     ? applyOnROI(processedImage, (img) -> applyShift(img, shiftVal))
                     : applyShift(processedImage, shiftVal);
-                                    repaint();
+                    repaint();
+                    log("Applied shift operation with value " + shiftVal);
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid input for shift value.");
                 }
@@ -1136,7 +1138,8 @@ public class Demo extends JPanel implements ActionListener {
             processedImage = (roi != null)
             ? applyOnROI(processedImage, (img) -> applyShiftAndRescale(img))
             : applyShiftAndRescale(processedImage);
-                    repaint();
+            repaint();
+            log("Applied shift and rescale operation.");
         }
         // ----- Lab3 Operations -----
         else if (cmd.equals("Arithmetic Add") ||
@@ -1156,28 +1159,31 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = applyOnROI2(processedImage, secondImage,
                     (imgA, imgB) -> applyArithmeticOperation(imgA, imgB, opFinal));
           repaint();
-                }
+          log("Applied arithmetic operation: " + opFinal);
+            }
         } else if (cmd.equals("Bitwise NOT")) {
             backupForUndo();
             processedImage = (roi != null)
             ? applyOnROI(processedImage, (img) -> applyBitwiseNot(img))
             : applyBitwiseNot(processedImage);
             repaint();
+            log("Applied bitwise NOT operation.");
         } else if (cmd.equals("Bitwise AND") ||
-                    cmd.equals("Bitwise OR") ||
-                    cmd.equals("Bitwise XOR")) {
-                if (secondImage == null) {
-                    JOptionPane.showMessageDialog(this, "Please load a second image first.");
-                } else {
-                    backupForUndo();
-                    String op = "";
-                    if (cmd.equals("Bitwise AND")) op = "and";
-                    else if (cmd.equals("Bitwise OR")) op = "or";
-                    else if (cmd.equals("Bitwise XOR")) op = "xor";
-                    final String opFinal = op;
-                    processedImage = applyOnROI2(processedImage, secondImage,
-                    (imgA, imgB) -> applyBitwiseOperation(imgA, imgB, opFinal));
-          repaint();
+            cmd.equals("Bitwise OR") ||
+            cmd.equals("Bitwise XOR")) {
+        if (secondImage == null) {
+            JOptionPane.showMessageDialog(this, "Please load a second image first.");
+        } else {
+            backupForUndo();
+            String op = "";
+            if (cmd.equals("Bitwise AND")) op = "and";
+            else if (cmd.equals("Bitwise OR")) op = "or";
+            else if (cmd.equals("Bitwise XOR")) op = "xor";
+            final String opFinal = op;
+            processedImage = applyOnROI2(processedImage, secondImage,
+            (imgA, imgB) -> applyBitwiseOperation(imgA, imgB, opFinal));
+            repaint();
+            log("Applied bitwise operation: " + opFinal);
                 }
         }        // ----- Lab4 Operations -----
         else if (cmd.equals("Point Negative")) {
@@ -1185,7 +1191,8 @@ public class Demo extends JPanel implements ActionListener {
             processedImage = (roi != null)
             ? applyOnROI(processedImage, (img) -> applyPointNegative(img))
             : applyPointNegative(processedImage);
-                    repaint();
+            repaint();
+            log("Applied point negative operation.");
         } else if (cmd.equals("Logarithmic Transform")) {
             String input = JOptionPane.showInputDialog(this, "Enter constant c (or leave blank for automatic):", "");
             Float cVal = null;
@@ -1201,7 +1208,7 @@ public class Demo extends JPanel implements ActionListener {
             processedImage = (roi != null) 
             ? applyOnROI(processedImage, (img) -> applyLogTransform(img, cValFinal))
             : applyLogTransform(processedImage, cVal);
-                    repaint();
+            repaint();
         } else if (cmd.equals("Power-Law Transform")) {
             String input = JOptionPane.showInputDialog(this, "Enter power (p, from 0.01 to 25):", "1.0");
             if (input != null) {
@@ -1214,7 +1221,8 @@ public class Demo extends JPanel implements ActionListener {
                         processedImage = (roi != null)
                         ? applyOnROI(processedImage, (img) -> applyPowerLawTransform(img, p))
                         : applyPowerLawTransform(processedImage, p);
-                                            repaint();
+                        repaint();
+                        log("Applied power-law transform with p = " + p);
                     }
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid input for power.");
@@ -1225,7 +1233,8 @@ public class Demo extends JPanel implements ActionListener {
             processedImage = (roi != null)
             ? applyOnROI(processedImage, (img) -> applyRandomLUT(img))
             : applyRandomLUT(processedImage);
-                    repaint();
+            repaint();
+            log("Applied random LUT transform.");
         } else if (cmd.equals("Bit-Plane Slicing")) {
             String input = JOptionPane.showInputDialog(this, "Enter bit plane (0-7):", "0");
             if (input != null) {
@@ -1238,7 +1247,8 @@ public class Demo extends JPanel implements ActionListener {
                         processedImage = (roi != null)
                         ? applyOnROI(processedImage, (img) -> applyBitPlaneSlicing(img, bit))
                         : applyBitPlaneSlicing(processedImage, bit);
-                                            repaint();
+                        repaint();
+                        log("Applied bit-plane slicing for bit " + bit);
                     }
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid input for bit.");
@@ -1385,6 +1395,7 @@ public class Demo extends JPanel implements ActionListener {
                         ? applyOnROI(processedImage, (img) -> applyConvolution(img, kernelFinal, useAbsFinal, normalize))
                         : applyConvolution(processedImage, kernel, useAbs, normalize);
                     repaint();
+                    log("Applied convolution with" + selection + " kernel." + (normalize ? " Rescaled output." : " Clamped output."));
                 }
             }
         }
@@ -1398,7 +1409,8 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = (roi != null)
                     ? applyOnROI(processedImage, (img) -> addSaltAndPepperNoise(img, noiseProb))
                     : addSaltAndPepperNoise(processedImage, noiseProb);
-                                    repaint();
+                    repaint();
+                    log("Applied salt-and-pepper noise with probability " + noiseProb);
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid noise probability.");
                 }
@@ -1412,7 +1424,8 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = (roi != null)
                     ? applyOnROI(processedImage, (img) -> applyMinFilter(img, size))
                     : applyMinFilter(processedImage, size);
-                                    repaint();
+                    repaint();
+                    log("Applied min filter with size " + size);
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid filter size.");
                 }
@@ -1426,7 +1439,8 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = (roi != null)
                     ? applyOnROI(processedImage, (img) -> applyMaxFilter(img, size))
                     : applyMaxFilter(processedImage, size);
-                                    repaint();
+                    repaint();
+                    log("Applied max filter with size " + size);
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid filter size.");
                 }
@@ -1440,7 +1454,8 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = (roi != null)
                     ? applyOnROI(processedImage, (img) -> applyMidpointFilter(img, size))
                     : applyMidpointFilter(processedImage, size);
-                                    repaint();
+                    repaint();
+                    log("Applied midpoint filter with size " + size);
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid filter size.");
                 }
@@ -1454,7 +1469,8 @@ public class Demo extends JPanel implements ActionListener {
                     processedImage = (roi != null)
                     ? applyOnROI(processedImage, (img) -> applyMedianFilter(img, size))
                     : applyMedianFilter(processedImage, size);
-                                    repaint();
+                    repaint();
+                    log("Applied median filter with size " + size);
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid filter size.");
                 }
@@ -1466,6 +1482,7 @@ public class Demo extends JPanel implements ActionListener {
             ? processedImage.getSubimage(roi.x, roi.y, roi.width, roi.height)
             : processedImage;
             double[] ms = computeMeanStd(target);
+            log("Mean: " + ms[0] + ", Std Dev: " + ms[1]);
             JOptionPane.showMessageDialog(this, "Mean: " + ms[0] + "\nStd Dev: " + ms[1]);
         } else if (cmd.equals("Simple Threshold")) {
             String input = JOptionPane.showInputDialog(this, "Enter threshold (0-255):", "128");
@@ -1477,6 +1494,7 @@ public class Demo extends JPanel implements ActionListener {
                     ? applyOnROI(processedImage, (img) -> simpleThreshold(img, thresh))
                     : simpleThreshold(processedImage, thresh);
                     repaint();
+                    log("Applied simple threshold with value " + thresh);
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, "Invalid threshold value.");
                 }
@@ -1489,6 +1507,7 @@ public class Demo extends JPanel implements ActionListener {
             ? applyOnROI(processedImage, (img) -> simpleThreshold(img, T))
             : simpleThreshold(processedImage, T);
             repaint();
+            log("Applied automated threshold with value " + T);
         }
         // Lab5 Operations: Histogram & Histogram Equalisation
         else if (cmd.equals("Histogram Equalisation")) {
